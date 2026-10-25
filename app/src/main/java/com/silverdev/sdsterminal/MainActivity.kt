@@ -19,12 +19,15 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import java.io.File
@@ -101,9 +104,9 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@androidx.compose.runtime.Composable
+@Composable
 private fun InstallingView(progress: Float) {
-    Box(Modifier.fillMaxSize().background(Bg), contentAlignment = androidx.compose.ui.Alignment.Center) {
+    Box(Modifier.fillMaxSize().background(Bg), contentAlignment = Alignment.Center) {
         androidx.compose.material3.Text(
             "Setting up environment… ${(progress * 100).toInt()}%",
             color = TextPrimary, fontFamily = MonoFamily
