@@ -57,11 +57,9 @@ import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -141,7 +139,7 @@ fun PixelField(modifier: Modifier = Modifier, pixelScale: Float = 4f) {
             if (q < 0f) q = 0f
             q = Math.pow(q.toDouble(), 1.25).toFloat() * 1.1f
             if (q > 1f) q = 1f
-            var idx = floor(q * (ramp.size - 1)).toInt().coerceIn(0, ramp.size - 1)
+            val idx = floor(q * (ramp.size - 1)).toInt().coerceIn(0, ramp.size - 1)
             if (idx > 0) drawRect(ramp[idx], Offset(x * pixelScale, y * pixelScale), Size(pixelScale, pixelScale))
         }
     }
