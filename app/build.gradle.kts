@@ -41,7 +41,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.0")
     implementation("androidx.lifecycle:lifecycle-service:2.8.0")
     implementation("androidx.navigation:navigation-compose:2.8.0")
-    implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("org.apache.commons:commons-compress:1.26.2")
     implementation(platform("androidx.compose:compose-bom:2024.09.00"))
     implementation("androidx.compose.ui:ui")
@@ -49,5 +48,9 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    
+    // Image loading
+    implementation("io.coil-kt:coil-compose:2.6.0")
+    
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
