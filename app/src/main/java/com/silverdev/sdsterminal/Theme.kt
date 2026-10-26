@@ -1,71 +1,35 @@
 package com.silverdev.sdsterminal
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ScrollableTabRow
-import androidx.compose.material3.Tab
-import androidx.compose.material3.Text
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEvent
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.isAltPressed
-import androidx.compose.ui.input.key.isCtrlPressed
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
-import androidx.navigation.compose.rememberNavController
+import androidx.navigation.compose.*
+import coil.compose.AsyncImage
 import java.io.File
 
 val Bg = Color(0xFF050505)
 val Surface = Color(0xFF0A0A0B)
 val Surface2 = Color(0xFF0F0F11)
-val Surface3 = Color(0xFF161618)
 val Border = Color(0xFF1B1B1E)
 val Border2 = Color(0xFF2B2B30)
 val TextPrimary = Color(0xFFEDEDF0)
@@ -74,16 +38,17 @@ val TextTertiary = Color(0xFF6A6A73)
 val TextQuaternary = Color(0xFF45454D)
 val Green = Color(0xFF3ECF8E)
 val Red = Color(0xFFF2555A)
-val DisplayFamily = FontFamily.Cursive
+val DisplayFamily = FontFamily.Cursive // Fallback for Chewy
 val MonoFamily = FontFamily.Monospace
 val TerminalBlack = Color(0xFF0D0D0D)
 val TerminalExtraRow = Color(0xFF101114)
+val ImageUrl = "https://i.ibb.co/Z6cSZgYB/favicon.png"
 
 private val DarkColors = darkColorScheme(
     primary = TextPrimary, onPrimary = Bg, secondary = Green,
     background = Bg, onBackground = TextPrimary,
     surface = Surface, onSurface = TextPrimary,
-    surfaceVariant = Surface3, onSurfaceVariant = TextSecondary,
+    surfaceVariant = Surface2, onSurfaceVariant = TextSecondary,
     outline = Border, error = Red
 )
 
@@ -99,7 +64,12 @@ fun SdsLogo(size: Int = 26, modifier: Modifier = Modifier) {
             .background(Surface2).border(1.dp, Border2, RoundedCornerShape(8.dp)),
         contentAlignment = Alignment.Center
     ) {
-        Icon(Icons.Default.Terminal, contentDescription = null, tint = TextSecondary, modifier = Modifier.size((size * 0.6f).dp))
+        AsyncImage(
+            model = ImageUrl,
+            contentDescription = "Logo",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp))
+        )
     }
 }
 
@@ -112,41 +82,41 @@ fun Pill(text: String, modifier: Modifier = Modifier, textColor: Color = TextTer
     )
 }
 
-data class NavItem(val label: String, val code: String, val onClick: () -> Unit)
+data class NavItem(val label: String, val onClick: () -> Unit)
 
 @Composable
 fun SdsNav(title: String, items: List<NavItem>, modifier: Modifier = Modifier) {
     var open by remember { mutableStateOf(false) }
-    Column(modifier.fillMaxWidth()) {
+    Box(modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(999.dp))
+            modifier = Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(999.dp))
                 .background(Surface.copy(alpha = 0.85f)).border(1.dp, Border, RoundedCornerShape(999.dp))
-                .padding(start = 10.dp, end = 8.dp),
+                .padding(start = 8.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            SdsLogo(26)
-            Spacer(Modifier.width(9.dp))
-            Text(title, color = TextPrimary, fontFamily = DisplayFamily, fontSize = 17.sp, modifier = Modifier.weight(1f))
+            SdsLogo(34)
+            Spacer(Modifier.width(12.dp))
+            Text(title, color = TextPrimary, fontFamily = DisplayFamily, fontSize = 20.sp, modifier = Modifier.weight(1f))
             Box(
-                modifier = Modifier.size(34.dp).clip(RoundedCornerShape(999.dp)).clickable { open = !open },
+                modifier = Modifier.size(38.dp).clip(CircleShape).clickable { open = !open },
                 contentAlignment = Alignment.Center
-            ) { Icon(Icons.Default.Menu, contentDescription = "Menu", tint = TextSecondary) }
+            ) { Icon(Icons.Default.Menu, contentDescription = "Menu", tint = TextPrimary) }
         }
+        
+        // Dropdown Menu
         if (open) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(60.dp))
             Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Surface.copy(alpha = 0.95f))
-                    .border(1.dp, Border, RoundedCornerShape(14.dp)).padding(6.dp)
+                Modifier.fillMaxWidth().padding(top = 60.dp).clip(RoundedCornerShape(16.dp)).background(Surface.copy(alpha = 0.95f))
+                    .border(1.dp, Border2, RoundedCornerShape(16.dp)).padding(8.dp)
             ) {
                 items.forEach { it2 ->
                     Row(
-                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp))
-                            .clickable { open = false; it2.onClick() }.padding(horizontal = 11.dp, vertical = 9.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+                            .clickable { open = false; it2.onClick() }.padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(it2.label, color = TextSecondary, fontFamily = DisplayFamily, fontSize = 16.sp)
-                        Text(it2.code, color = TextQuaternary, fontFamily = MonoFamily, fontSize = 10.sp)
+                        Text(it2.label, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium)
                     }
                 }
             }
@@ -236,64 +206,77 @@ private fun handleKey(event: KeyEvent, session: TerminalSession): Boolean {
 fun HomeScreen(onTerminal: () -> Unit, onFiles: () -> Unit, onPackages: () -> Unit, onSecurity: () -> Unit) {
     val tiles = listOf(
         Triple("Terminal", Icons.Default.Terminal, onTerminal),
-        Triple("Files", Icons.Default.Folder, onFiles),
-        Triple("Packages", Icons.Default.Description, onPackages),
-        Triple("Security", Icons.Default.Menu, onSecurity)
+        Triple("File Browser", Icons.Default.Folder, onFiles),
+        Triple("Linux Packages", Icons.Default.Memory, onPackages),
+        Triple("Permissions", Icons.Default.Security, onSecurity)
     )
+    
     Box(Modifier.fillMaxSize().background(Bg)) {
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF0A0A0C), Bg))))
+        // Soft, premium radial gradient background
+        Box(Modifier.fillMaxSize().background(Brush.radialGradient(
+            colors = listOf(Color(0xFF1A1A24), Bg),
+            center = androidx.compose.ui.geometry.Offset(0f, 0f),
+            radius = 1500f
+        )))
+        
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-            SectionLabel("Profile")
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                SdsLogo(58)
-                Spacer(Modifier.width(14.dp))
+            
+            // Hero Section with Image
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Surface.copy(alpha = 0.4f))
+                    .border(1.dp, Border2, RoundedCornerShape(20.dp)).padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AsyncImage(
+                    model = ImageUrl,
+                    contentDescription = "SDS Logo",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(72.dp).clip(RoundedCornerShape(16.dp)).border(1.dp, Border2, RoundedCornerShape(16.dp))
+                )
+                Spacer(Modifier.width(16.dp))
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("SDS Terminal", color = TextPrimary, fontFamily = DisplayFamily, fontSize = 26.sp)
+                        Text("SDS Terminal", color = TextPrimary, fontFamily = DisplayFamily, fontSize = 28.sp)
                         Spacer(Modifier.width(8.dp))
-                        Pill("SDS")
+                        Pill("v1.0")
                     }
-                    Text("A terminal that feels like you.", color = TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+                    Text("A premium native Android terminal.", color = TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
-                        Box(Modifier.size(6.dp).clip(RoundedCornerShape(999.dp)).background(Green))
+                        Box(Modifier.size(6.dp).clip(CircleShape).background(Green))
                         Spacer(Modifier.width(6.dp))
-                        Text("Available  ·  Local  ·  Offline-first", color = TextSecondary, fontFamily = MonoFamily, fontSize = 11.sp)
+                        Text("System Ready", color = Green, fontFamily = MonoFamily, fontSize = 11.sp)
                     }
                 }
             }
-            Spacer(Modifier.height(28.dp)); SectionLabel("Quick actions")
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            
+            Spacer(Modifier.height(32.dp)); SectionLabel("Quick Actions")
+            
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 tiles.forEach { (label, icon, onClick) ->
                     Row(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Surface)
-                            .border(1.dp, Border, RoundedCornerShape(10.dp)).clickable { onClick() }
-                            .padding(horizontal = 12.dp, vertical = 12.dp),
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Surface.copy(alpha = 0.6f))
+                            .border(1.dp, Border2, RoundedCornerShape(16.dp)).clickable { onClick() }
+                            .padding(horizontal = 20.dp, vertical = 18.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(icon, null, tint = TextSecondary, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(10.dp))
-                        Text(label, color = TextSecondary, fontSize = 12.5.sp, modifier = Modifier.weight(1f))
-                        Text("↗", color = TextQuaternary, fontFamily = MonoFamily, fontSize = 12.sp)
+                        Box(Modifier.size(36.dp).clip(CircleShape).background(Surface2), contentAlignment = Alignment.Center) {
+                            Icon(icon, null, tint = TextPrimary, modifier = Modifier.size(18.dp))
+                        }
+                        Spacer(Modifier.width(16.dp))
+                        Text(label, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                        Text("→", color = TextQuaternary, fontFamily = MonoFamily, fontSize = 16.sp)
                     }
                 }
             }
-            Spacer(Modifier.height(28.dp)); SectionLabel("Recent sessions")
+            
+            Spacer(Modifier.height(32.dp)); SectionLabel("Environment")
             Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Surface)
-                    .border(1.dp, Border, RoundedCornerShape(10.dp)).padding(18.dp)
-            ) {
-                Text("No recent sessions yet.", color = TextTertiary, fontFamily = MonoFamily, fontSize = 11.sp)
-                Spacer(Modifier.height(8.dp))
-                Text("Tap Terminal to start your first shell.", color = TextPrimary, fontSize = 14.sp)
-            }
-            Spacer(Modifier.height(28.dp)); SectionLabel("About")
-            Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Surface)
-                    .border(1.dp, Border, RoundedCornerShape(10.dp)).padding(18.dp)
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Surface.copy(alpha = 0.6f))
+                    .border(1.dp, Border2, RoundedCornerShape(16.dp)).padding(20.dp)
             ) {
                 Text(
-                    "SDS Terminal is a small, hand-built Android terminal from Silver Dev Studios. Real PTY, real shell. Runs Android shell by default; Linux rootfs when proot is bundled.",
-                    color = TextSecondary, fontSize = 13.sp, lineHeight = 20.sp
+                    "SDS Terminal runs a full Ubuntu Linux userspace in userspace using proot. No root required. On first launch, it will silently download and extract Linux directly inside the terminal.",
+                    color = TextSecondary, fontSize = 13.sp, lineHeight = 22.sp
                 )
             }
             Spacer(Modifier.height(24.dp))
@@ -304,8 +287,8 @@ fun HomeScreen(onTerminal: () -> Unit, onFiles: () -> Unit, onPackages: () -> Un
 @Composable
 private fun SectionLabel(text: String) {
     Text(
-        text.uppercase(), color = TextQuaternary, fontFamily = MonoFamily, fontSize = 10.5.sp,
-        letterSpacing = 1.6.sp, modifier = Modifier.padding(bottom = 12.dp)
+        text.uppercase(), color = TextQuaternary, fontFamily = MonoFamily, fontSize = 11.sp,
+        letterSpacing = 1.6.sp, modifier = Modifier.padding(bottom = 12.dp, start = 4.dp)
     )
 }
 
@@ -319,24 +302,25 @@ fun FileBrowserScreen(rootDir: File) {
         }
     }
     Column(Modifier.fillMaxSize().background(Bg)) {
-        Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { currentDir.parentFile?.let { currentDir = it } }, enabled = currentDir != rootDir) {
-                Icon(Icons.Default.Menu, contentDescription = "Up", tint = TextPrimary)
+                Icon(Icons.Default.ArrowBack, contentDescription = "Up", tint = TextPrimary)
             }
-            Text(currentDir.name.ifEmpty { "/" }, color = TextPrimary, fontSize = 15.sp, fontFamily = MonoFamily)
+            Text(currentDir.name.ifEmpty { "/" }, color = TextPrimary, fontSize = 18.sp, fontFamily = DisplayFamily)
         }
-        Text(currentDir.absolutePath, color = TextTertiary, fontSize = 11.sp, fontFamily = MonoFamily, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+        Text(currentDir.absolutePath, color = TextTertiary, fontSize = 11.sp, fontFamily = MonoFamily, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
+        
         entries.forEach { file ->
             Row(
                 Modifier.fillMaxWidth().clickable { if (file.isDirectory) currentDir = file }
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
                     if (file.isDirectory) Icons.Default.Folder else Icons.Default.Description,
-                    null, tint = if (file.isDirectory) TextPrimary else TextTertiary, modifier = Modifier.size(22.dp)
+                    null, tint = if (file.isDirectory) TextPrimary else TextTertiary, modifier = Modifier.size(24.dp)
                 )
-                Text("  ${file.name}", color = TextPrimary, fontSize = 14.sp, fontFamily = MonoFamily)
+                Text("  ${file.name}", color = TextPrimary, fontSize = 15.sp, fontFamily = MonoFamily)
             }
             HorizontalDivider(color = Border)
         }
@@ -346,15 +330,15 @@ fun FileBrowserScreen(rootDir: File) {
 @Composable
 fun SecurityScreen() {
     Column(Modifier.fillMaxSize().background(Bg).verticalScroll(rememberScrollState()).padding(20.dp)) {
-        Text("Security", fontFamily = DisplayFamily, fontSize = 22.sp, color = TextPrimary)
+        Text("Permissions", fontFamily = DisplayFamily, fontSize = 26.sp, color = TextPrimary)
         Text(
-            "SDS Terminal runs a Linux userspace inside proot when bundled. proot is a userspace chroot and bind-mount emulation, not a kernel sandbox. It does not grant root. Commands only run when typed. Nothing is silently executed.",
-            fontSize = 14.sp, color = TextSecondary, lineHeight = 22.sp, modifier = Modifier.padding(top = 12.dp)
+            "SDS Terminal runs a Linux userspace inside proot. It does not grant root access to the Android system. Commands only run when typed.",
+            fontSize = 14.sp, color = TextSecondary, lineHeight = 24.sp, modifier = Modifier.padding(top = 16.dp)
         )
-        Text("Storage permissions", fontSize = 16.sp, color = TextPrimary, modifier = Modifier.padding(top = 24.dp))
+        Text("Storage Access", fontSize = 18.sp, fontFamily = DisplayFamily, color = TextPrimary, modifier = Modifier.padding(top = 32.dp))
         Text(
-            "No broad storage permission is requested. The rootfs lives in the app's private files directory.",
-            fontSize = 14.sp, color = TextSecondary, lineHeight = 22.sp, modifier = Modifier.padding(top = 8.dp)
+            "To access your Android files (like /sdcard) inside the Linux environment, you must grant 'All Files Access' when prompted by Android.",
+            fontSize = 14.sp, color = TextSecondary, lineHeight = 24.sp, modifier = Modifier.padding(top = 12.dp)
         )
     }
 }
@@ -363,18 +347,25 @@ fun SecurityScreen() {
 fun PackagesScreen(onInstall: (String) -> Unit) {
     var pkg by remember { mutableStateOf("") }
     Column(Modifier.fillMaxSize().background(Bg).imePadding().padding(20.dp)) {
-        Text("Package Manager", fontFamily = DisplayFamily, fontSize = 22.sp, color = TextPrimary)
-        Text("Installs run inside the proot session using apt.", fontSize = 13.sp, color = TextSecondary, modifier = Modifier.padding(top = 4.dp, bottom = 20.dp))
+        Text("Package Manager", fontFamily = DisplayFamily, fontSize = 26.sp, color = TextPrimary)
+        Text("Install packages inside the Ubuntu environment using apt.", fontSize = 14.sp, color = TextSecondary, modifier = Modifier.padding(top = 8.dp, bottom = 24.dp))
+        
         androidx.compose.material3.OutlinedTextField(
-            value = pkg, onValueChange = { pkg = it }, label = { Text("Package name") },
-            singleLine = true, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()
+            value = pkg, onValueChange = { pkg = it }, label = { Text("Package name (e.g. python3)") },
+            singleLine = true, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth(),
+            colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Green,
+                unfocusedBorderColor = Border2,
+                focusedTextColor = TextPrimary,
+                unfocusedTextColor = TextPrimary
+            )
         )
         androidx.compose.material3.Button(
             onClick = { if (pkg.isNotBlank()) onInstall(pkg.trim()) },
-            modifier = Modifier.padding(top = 12.dp),
+            modifier = Modifier.padding(top = 16.dp).fillMaxWidth().height(50.dp),
             colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = TextPrimary, contentColor = Bg),
-            shape = RoundedCornerShape(10.dp)
-        ) { Text("Install", fontFamily = MonoFamily) }
+            shape = RoundedCornerShape(12.dp)
+        ) { Text("Install Package", fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold) }
     }
 }
 
@@ -384,6 +375,7 @@ fun RootNav(manager: SessionManager, rootDir: File) {
     val back by nav.currentBackStackEntryAsState()
     val current = back?.destination?.route ?: "home"
     val showNav = current != "terminal"
+    
     Box(Modifier.fillMaxSize().background(Bg)) {
         NavHost(
             navController = nav, startDestination = "home",
@@ -408,14 +400,16 @@ fun RootNav(manager: SessionManager, rootDir: File) {
             }
             composable("security") { SecurityScreen() }
         }
+        
+        // Floating Web-Style Nav Bar
         if (showNav) {
             Box(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 16.dp, vertical = 12.dp)) {
                 SdsNav("SDS Terminal", listOf(
-                    NavItem("Home", "00") { if (current != "home") nav.navigate("home") { launchSingleTop = true } },
-                    NavItem("Terminal", "01") { nav.navigate("terminal") { launchSingleTop = true } },
-                    NavItem("Files", "02") { nav.navigate("files") { launchSingleTop = true } },
-                    NavItem("Packages", "03") { nav.navigate("packages") { launchSingleTop = true } },
-                    NavItem("Security", "04") { nav.navigate("security") { launchSingleTop = true } }
+                    NavItem("Home") { if (current != "home") nav.navigate("home") { launchSingleTop = true } },
+                    NavItem("Terminal") { nav.navigate("terminal") { launchSingleTop = true } },
+                    NavItem("File Browser") { nav.navigate("files") { launchSingleTop = true } },
+                    NavItem("Linux Packages") { nav.navigate("packages") { launchSingleTop = true } },
+                    NavItem("Permissions") { nav.navigate("security") { launchSingleTop = true } }
                 ))
             }
         }
