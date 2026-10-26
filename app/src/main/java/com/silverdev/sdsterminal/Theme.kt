@@ -1,10 +1,17 @@
 package com.silverdev.sdsterminal
 
+import android.app.ActivityManager
+import android.app.NotificationManager
+import android.content.Context
+import android.content.Intent
+import android.os.Build
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -21,12 +28,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.compose.*
 import coil.compose.AsyncImage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
 import java.io.File
 
 val Bg = Color(0xFF050505)
@@ -150,7 +166,7 @@ private fun handleKey(event: KeyEvent, session: TerminalSession): Boolean {
 }
 
 @Composable
-fun HomeScreen(bgImageUri: String?, onPickImage: () -> Unit, onTerminal: () -> Unit, onFiles: () -> Unit, onPackages: () -> Unit, onSecurity: () -> Unit) {
+fun HomeScreen(bgImageUri: String?, onPickImage: () -> Unit, onTerminal: () -> Unit, onFiles: () -> Unit, onAi: () -> Unit, onOptimize: () -> Unit, onSecurity: () -> Unit) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 32.dp)
@@ -194,9 +210,11 @@ fun HomeScreen(bgImageUri: String?, onPickImage: () -> Unit, onTerminal: () -> U
 
         ActionCard("Terminal", "Launch bash shell", Icons.Default.Terminal, onTerminal)
         Spacer(Modifier.height(12.dp))
+        ActionCard("AI Assistant", "Ask questions or open apps", Icons.Default.AutoAwesome, onAi)
+        Spacer(Modifier.height(12.dp))
         ActionCard("File Browser", "Browse Android storage", Icons.Default.Folder, onFiles)
         Spacer(Modifier.height(12.dp))
-        ActionCard("Packages", "Install apt packages", Icons.Default.Memory, onPackages)
+        ActionCard("Game Booster", "Optimize RAM & performance", Icons.Default.Bolt, onOptimize)
         Spacer(Modifier.height(12.dp))
         ActionCard("Settings", "Permissions & Appearance", Icons.Default.Settings, onSecurity)
         
@@ -231,7 +249,7 @@ fun FileBrowserScreen(rootDir: File) {
     var currentDir by remember { mutableStateOf(rootDir) }
     var entries by remember { mutableStateOf(emptyList<File>()) }
     LaunchedEffect(currentDir) {
-        entries = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        entries = withContext(Dispatchers.IO) {
             currentDir.listFiles()?.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() })) ?: emptyList()
         }
     }
@@ -259,6 +277,255 @@ fun FileBrowserScreen(rootDir: File) {
             }
             HorizontalDivider(color = Border)
         }
+    }
+}
+
+@Composable
+fun OptimizationScreen() {
+    val context = LocalContext.current
+    var toastMsg by remember { mutableStateOf("") }
+    var ramFreed by remember { mutableStateOf(0L) }
+
+    Column(Modifier.fillMaxSize().background(Bg.copy(alpha = 0.95f)).padding(20.dp)) {
+        Text("Game Booster", fontFamily = SansFamily, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+        Text("Optimize your device for maximum performance.", fontSize = 14.sp, color = TextSecondary, modifier = Modifier.padding(top = 8.dp))
+        
+        Spacer(Modifier.height(32.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth().clickable {
+                val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+                val memInfo = ActivityManager.MemoryInfo()
+                am.getMemoryInfo(memInfo)
+                val before = memInfo.availMem
+                
+                val pm = context.packageManager
+                val packages = pm.getInstalledApplications(0)
+                for (pkg in packages) {
+                    if (pkg.packageName != context.packageName) {
+                        am.killBackgroundProcesses(pkg.packageName)
+                    }
+                }
+                
+                am.getMemoryInfo(memInfo)
+                val after = memInfo.availMem
+                ramFreed = (after - before) / (1024 * 1024)
+                toastMsg = "Boosted! Freed ${if (ramFreed > 0) ramFreed else 0} MB of RAM."
+            },
+            colors = CardDefaults.cardColors(containerColor = Surface),
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.dp, Border)
+        ) {
+            Row(Modifier.padding(24.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Bolt, contentDescription = null, tint = Green, modifier = Modifier.size(48.dp))
+                Spacer(Modifier.width(16.dp))
+                Column {
+                    Text("Boost Memory", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text("Kill background apps to free up RAM", fontSize = 13.sp, color = TextSecondary, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth().clickable {
+                val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    if (notificationManager.isNotificationPolicyAccessGranted) {
+                        notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
+                        toastMsg = "Do Not Disturb enabled. Have fun gaming!"
+                    } else {
+                        val intent = Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
+                        context.startActivity(intent)
+                        toastMsg = "Please grant DND access in settings."
+                    }
+                }
+            },
+            colors = CardDefaults.cardColors(containerColor = Surface),
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.dp, Border)
+        ) {
+            Row(Modifier.padding(24.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.DoNotDisturb, contentDescription = null, tint = Red, modifier = Modifier.size(48.dp))
+                Spacer(Modifier.width(16.dp))
+                Column {
+                    Text("Do Not Disturb", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text("Block notifications while gaming", fontSize = 13.sp, color = TextSecondary, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
+        }
+
+        if (toastMsg.isNotEmpty()) {
+            Spacer(Modifier.height(24.dp))
+            Text(toastMsg, fontFamily = MonoFamily, fontSize = 14.sp, color = Green, modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        }
+    }
+}
+
+data class ChatMessage(val isUser: Boolean, val text: String)
+
+@Composable
+fun AiScreen() {
+    val context = LocalContext.current
+    val prefs = context.getSharedPreferences("sds_prefs", Context.MODE_PRIVATE)
+    
+    var apiKey by remember { mutableStateOf(prefs.getString("gemini_key", "") ?: "") }
+    var showSettings by remember { mutableStateOf(apiKey.isEmpty()) }
+    var inputText by remember { mutableStateOf("") }
+    var messages by remember { mutableStateOf(listOf(ChatMessage(false, "Hello. I am the SDS Assistant. I can answer questions or open apps for you. Try: 'open discord'")) }
+    var isTyping by remember { mutableStateOf(false) }
+    
+    val scope = rememberCoroutineScope()
+    val client = remember { OkHttpClient() }
+
+    fun sendMessage() {
+        if (inputText.isBlank()) return
+        val userMsg = inputText
+        messages = messages + ChatMessage(true, userMsg)
+        inputText = ""
+        
+        val lower = userMsg.lowercase()
+        if (lower.startsWith("open ")) {
+            val appName = lower.removePrefix("open ").trim()
+            val pm = context.packageManager
+            val packages = pm.getInstalledApplications(0)
+            val target = packages.find { 
+                (it.loadLabel(pm).toString().lowercase().contains(appName)) || 
+                (it.packageName.lowercase().contains(appName))
+            }
+            
+            if (target != null) {
+                val intent = pm.getLaunchIntentForPackage(target.packageName)
+                if (intent != null) {
+                    context.startActivity(intent)
+                    messages = messages + ChatMessage(false, "Opened ${target.loadLabel(pm)}.")
+                    return
+                }
+            } else {
+                messages = messages + ChatMessage(false, "App '$appName' not found on this device.")
+                return
+            }
+        }
+
+        isTyping = true
+        scope.launch {
+            val reply = callGemini(client, apiKey, userMsg)
+            messages = messages + ChatMessage(false, reply)
+            isTyping = false
+        }
+    }
+
+    Column(Modifier.fillMaxSize().background(Bg.copy(alpha = 0.95f)).padding(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Text("AI Assistant", fontFamily = SansFamily, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = TextPrimary, modifier = Modifier.weight(1f))
+            IconButton(onClick = { showSettings = !showSettings }) {
+                Icon(Icons.Default.Settings, contentDescription = "Settings", tint = TextSecondary)
+            }
+        }
+        
+        if (showSettings) {
+            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                BasicTextField(
+                    value = apiKey,
+                    onValueChange = { 
+                        apiKey = it 
+                        prefs.edit().putString("gemini_key", it).apply()
+                    },
+                    textStyle = androidx.compose.ui.text.TextStyle(fontFamily = MonoFamily, fontSize = 14.sp, color = TextPrimary),
+                    cursorBrush = SolidColor(TextPrimary),
+                    modifier = Modifier.weight(1f).background(Surface).border(1.dp, Border).padding(12.dp),
+                    decorationBox = { inner ->
+                        if (apiKey.isEmpty()) Text("Enter Gemini API Key", fontFamily = MonoFamily, fontSize = 14.sp, color = TextTertiary)
+                        inner()
+                    }
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+
+        LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
+            items(messages) { msg ->
+                Box(
+                    Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    contentAlignment = if (msg.isUser) Alignment.CenterEnd else Alignment.CenterStart
+                ) {
+                    Text(
+                        msg.text,
+                        fontFamily = MonoFamily,
+                        fontSize = 14.sp,
+                        color = if (msg.isUser) Bg else TextPrimary,
+                        modifier = Modifier
+                            .background(if (msg.isUser) TextPrimary else Surface)
+                            .border(1.dp, if (msg.isUser) Color.Transparent else Border, RoundedCornerShape(8.dp))
+                            .padding(12.dp)
+                    )
+                }
+            }
+            if (isTyping) {
+                item {
+                    Text("Thinking...", fontFamily = MonoFamily, fontSize = 12.sp, color = TextTertiary, modifier = Modifier.padding(8.dp))
+                }
+            }
+        }
+
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            BasicTextField(
+                value = inputText,
+                onValueChange = { inputText = it },
+                textStyle = androidx.compose.ui.text.TextStyle(fontFamily = MonoFamily, fontSize = 14.sp, color = TextPrimary),
+                cursorBrush = SolidColor(TextPrimary),
+                modifier = Modifier.weight(1f).background(Surface).border(1.dp, Border, RoundedCornerShape(8.dp)).padding(12.dp),
+                decorationBox = { inner ->
+                    if (inputText.isEmpty()) Text("Ask anything or 'open youtube'...", fontFamily = MonoFamily, fontSize = 14.sp, color = TextTertiary)
+                    inner()
+                }
+            )
+            Spacer(Modifier.width(8.dp))
+            IconButton(
+                onClick = { sendMessage() },
+                modifier = Modifier.background(TextPrimary).size(48.dp)
+            ) {
+                Icon(Icons.Default.Send, contentDescription = "Send", tint = Bg)
+            }
+        }
+    }
+}
+
+suspend fun callGemini(client: OkHttpClient, apiKey: String, prompt: String): String = withContext(Dispatchers.IO) {
+    if (apiKey.isEmpty()) return@withContext "Please set your Gemini API Key in the settings icon above."
+    
+    try {
+        val json = JSONObject().apply {
+            put("contents", org.json.JSONArray().put(JSONObject().apply {
+                put("parts", org.json.JSONArray().put(JSONObject().apply {
+                    put("text", "You are the AI assistant inside SDS Terminal, a Linux terminal app. Keep responses short and helpful. User says: $prompt")
+                }))
+            }))
+        }
+
+        val body = json.toString().toRequestBody("application/json".toMediaType())
+        val request = Request.Builder()
+            .url("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=$apiKey")
+            .post(body)
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            val resBody = response.body?.string() ?: return@withContext "Error: Empty response"
+            val jsonRes = JSONObject(resBody)
+            if (jsonRes.has("error")) {
+                return@withContext "API Error: ${jsonRes.getJSONObject("error").getString("message")}"
+            }
+            val text = jsonRes.getJSONArray("candidates")
+                .getJSONObject(0)
+                .getJSONObject("content")
+                .getJSONArray("parts")
+                .getJSONObject(0)
+                .getString("text")
+            return@withContext text
+        }
+    } catch (e: Exception) {
+        return@withContext "Network Error: ${e.message}"
     }
 }
 
@@ -307,39 +574,6 @@ fun SecurityScreen(bgImageUri: String?, onPickImage: () -> Unit) {
 }
 
 @Composable
-fun PackagesScreen(onInstall: (String) -> Unit) {
-    var pkg by remember { mutableStateOf("") }
-    Column(Modifier.fillMaxSize().background(Bg.copy(alpha = 0.95f)).imePadding().padding(20.dp)) {
-        Text("Packages", fontFamily = SansFamily, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-        Spacer(Modifier.height(8.dp))
-        Text("Install apt packages inside Ubuntu.", fontSize = 14.sp, color = TextSecondary)
-        
-        Spacer(Modifier.height(32.dp))
-        
-        BasicTextField(
-            value = pkg,
-            onValueChange = { pkg = it },
-            textStyle = androidx.compose.ui.text.TextStyle(fontFamily = MonoFamily, fontSize = 16.sp, color = TextPrimary),
-            cursorBrush = SolidColor(TextPrimary),
-            modifier = Modifier.fillMaxWidth().background(Surface).border(1.dp, Border).padding(16.dp),
-            decorationBox = { inner ->
-                if (pkg.isEmpty()) Text("package_name (e.g. python3)", fontFamily = MonoFamily, fontSize = 16.sp, color = TextTertiary)
-                inner()
-            }
-        )
-        
-        Spacer(Modifier.height(16.dp))
-        Box(
-            Modifier.fillMaxWidth().background(TextPrimary).clip(RoundedCornerShape(8.dp)).clickable { if (pkg.isNotBlank()) onInstall(pkg.trim()) }
-                .padding(16.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text("INSTALL", fontFamily = SansFamily, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Bg)
-        }
-    }
-}
-
-@Composable
 fun RootNav(manager: SessionManager, rootDir: File, bgImageUri: String?, onPickImage: () -> Unit) {
     val nav = rememberNavController()
     val back by nav.currentBackStackEntryAsState()
@@ -353,19 +587,15 @@ fun RootNav(manager: SessionManager, rootDir: File, bgImageUri: String?, onPickI
                     onPickImage = onPickImage,
                     onTerminal = { nav.navigate("terminal") },
                     onFiles = { nav.navigate("files") },
-                    onPackages = { nav.navigate("packages") },
+                    onAi = { nav.navigate("ai") },
+                    onOptimize = { nav.navigate("optimize") },
                     onSecurity = { nav.navigate("security") }
                 )
             }
             composable("terminal") { TerminalScreen(manager) }
+            composable("ai") { AiScreen() }
+            composable("optimize") { OptimizationScreen() }
             composable("files") { FileBrowserScreen(rootDir) }
-            composable("packages") {
-                PackagesScreen { p ->
-                    val s = manager.active() ?: manager.newSession()
-                    s.write("apt update && apt install -y $p\n".toByteArray())
-                    nav.navigate("terminal")
-                }
-            }
             composable("security") { SecurityScreen(bgImageUri, onPickImage) }
         }
         
