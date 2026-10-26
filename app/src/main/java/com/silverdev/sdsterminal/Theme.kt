@@ -1,5 +1,6 @@
 package com.silverdev.sdsterminal
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -142,7 +143,7 @@ private fun handleKey(event: KeyEvent, session: TerminalSession): Boolean {
         Key.DirectionLeft -> { session.write("\u001B[D".toByteArray()); return true }
         else -> {}
     }
-    val cp = event.nativeKeyCode
+    val cp = event.nativeKeyEvent.unicodeChar
     if (event.isCtrlPressed && cp in 'a'.code..'z'.code) { session.write(byteArrayOf((cp - 'a'.code + 1).toByte())); return true }
     if (event.isAltPressed && cp != 0) { session.write(byteArrayOf(0x1B, cp.toByte())); return true }
     return false
@@ -154,7 +155,6 @@ fun HomeScreen(bgImageUri: String?, onPickImage: () -> Unit, onTerminal: () -> U
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 32.dp)
     ) {
-        // Header
         Row(verticalAlignment = Alignment.CenterVertically) {
             AsyncImage(
                 model = ImageUrl,
@@ -170,7 +170,6 @@ fun HomeScreen(bgImageUri: String?, onPickImage: () -> Unit, onTerminal: () -> U
 
         Spacer(Modifier.height(40.dp))
 
-        // Background Prompt (Massive and obvious)
         if (bgImageUri == null) {
             Card(
                 modifier = Modifier.fillMaxWidth().clickable { onPickImage() },
@@ -190,7 +189,6 @@ fun HomeScreen(bgImageUri: String?, onPickImage: () -> Unit, onTerminal: () -> U
             Spacer(Modifier.height(24.dp))
         }
 
-        // Main Actions
         Text("QUICK ACTIONS", fontFamily = MonoFamily, fontSize = 12.sp, color = TextTertiary, letterSpacing = 1.sp)
         Spacer(Modifier.height(16.dp))
 
@@ -371,7 +369,6 @@ fun RootNav(manager: SessionManager, rootDir: File, bgImageUri: String?, onPickI
             composable("security") { SecurityScreen(bgImageUri, onPickImage) }
         }
         
-        // Floating back button for sub-screens
         if (current != "home" && current != "terminal") {
             Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.TopEnd) {
                 Box(
