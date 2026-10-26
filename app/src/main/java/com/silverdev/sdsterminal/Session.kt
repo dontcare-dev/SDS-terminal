@@ -1,6 +1,7 @@
 package com.silverdev.sdsterminal
 
 import android.content.Context
+import android.os.Environment
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -13,7 +14,6 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import java.security.MessageDigest
 import java.util.UUID
 import java.util.zip.GZIPInputStream
 
@@ -33,13 +33,31 @@ class TerminalSession(
     var isRunning: Boolean = false
         private set
 
-    fun start(useAndroidShell: Boolean = false) {
+    fun start(forceAndroidShell: Boolean = false) {
         if (masterFd >= 0 || isRunning) return
         isRunning = true
         readJob = scope.launch {
-            masterFd = if (useAndroidShell) launchAndroidShell() else launchProot()
+            val isRootfsReady = File(rootfsDir, ".installed").exists()
+            
+            if (!isRootfsReady && !forceAndroidShell) {
+                feed("\r\n[*] First launch: Downloading Ubuntu Rootfs (approx 30MB)...\r\n")
+                try {
+                    downloadAndExtract { progress ->
+                        val percent = (progress * 100).toInt()
+                        feed("\rProgress: $percent%")
+                    }
+                    feed("\r\n[*] Extraction complete. Starting bash...\r\n\r\n")
+                } catch (e: Exception) {
+                    feed("\r\n[!] Download failed: ${e.message}\r\n[!] Falling back to Android shell.\r\n\r\n")
+                    forceAndroidShell
+                }
+            }
+
+            val useShell = forceAndroidShell || !File(rootfsDir, ".installed").exists()
+            masterFd = if (useShell) launchAndroidShell() else launchProot()
+
             if (masterFd < 0) {
-                feed("\r\n[Failed to start session]\r\n")
+                feed("\r\n[Failed to start PTY]\r\n")
                 isRunning = false
                 return@launch
             }
@@ -47,18 +65,72 @@ class TerminalSession(
         }
     }
 
+    private fun downloadAndExtract(onProgress: (Float) -> Unit) {
+        val url = "https://cdimage.ubuntu.com/ubuntu-base/releases/22.04/release/ubuntu-base-22.04-base-arm64.tar.gz"
+        val archive = File(context.cacheDir, "ubuntu.tar.gz")
+        
+        val conn = (URL(url).openConnection() as HttpURLConnection).apply { connectTimeout = 30_000; readTimeout = 60_000 }
+        conn.inputStream.use { input ->
+            FileOutputStream(archive).use { out ->
+                val buf = ByteArray(64 * 1024); var total = 0L; val size = conn.contentLengthLong
+                var lastUpdate = 0L
+                while (true) {
+                    val n = input.read(buf); if (n <= 0) break
+                    out.write(buf, 0, n); total += n
+                    if (size > 0) {
+                        val now = System.currentTimeMillis()
+                        if (now - lastUpdate > 500) {
+                            onProgress(total.toFloat() / size)
+                            lastUpdate = now
+                        }
+                    }
+                }
+            }
+        }
+        
+        rootfsDir.mkdirs()
+        GZIPInputStream(archive.inputStream()).use { gz ->
+            TarArchiveInputStream(gz).use { tar ->
+                var e = tar.nextEntry
+                while (e != null) {
+                    val out = File(rootfsDir, e.name)
+                    if (e.isDirectory) out.mkdirs()
+                    else { out.parentFile?.mkdirs(); FileOutputStream(out).use { fos -> tar.copyTo(fos) } }
+                    e = tar.nextEntry
+                }
+            }
+        }
+        archive.delete()
+        File(rootfsDir, ".installed").writeText("ok")
+    }
+
     private fun launchProot(): Int {
         val nativeDir = context.applicationInfo.nativeLibraryDir
         homeDir.mkdirs()
-        val args = arrayOf(
+        
+        val hasSdCard = Environment.isExternalStorageManager()
+        val bindSdCard = if (hasSdCard) arrayOf("-b", "/storage/emulated/0:/sdcard") else arrayOf()
+
+        val args = mutableListOf(
             "-r", rootfsDir.absolutePath,
             "-b", "/dev", "-b", "/proc", "-b", "/sys",
             "-b", "${homeDir.absolutePath}:/root", "-w", "/root", "--link2symlink",
+            "-b", "${context.applicationInfo.nativeLibraryDir}:/data/data/com.termux/files/usr/libexec"
+        )
+        args.addAll(bindSdCard)
+        args.addAll(arrayOf(
             "/usr/bin/env", "-i", "HOME=/root", "TERM=xterm-256color", "LANG=C.UTF-8",
             "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
             "/bin/bash", "--login"
+        ))
+
+        // Set LD_LIBRARY_PATH so the linker can find libtalloc.so
+        val env = arrayOf(
+            "PROOT_LOADER=$nativeDir/libproot-loader.so",
+            "LD_LIBRARY_PATH=$nativeDir"
         )
-        val fd = PtyNative.openPty("$nativeDir/libproot.so", args, arrayOf())
+
+        val fd = PtyNative.openPty("$nativeDir/libproot.so", args.toTypedArray(), env)
         if (fd >= 0) PtyNative.setWindowSize(fd, buffer.rows, buffer.cols)
         return fd
     }
@@ -79,7 +151,7 @@ class TerminalSession(
             if (n > 0) {
                 parser.feed(buf, n)
                 buffer.bump()
-                delay(16) // Throttle UI updates to prevent freezing during heavy output
+                delay(16) 
             } else if (n < 0) {
                 break
             } else {
@@ -121,10 +193,7 @@ class SessionManager(private val context: Context) {
     private val sessions = mutableListOf<TerminalSession>()
     private var activeIndex = 0
 
-    fun prootAvailable() = File(context.applicationInfo.nativeLibraryDir, "libproot.so").exists()
-
     fun newSession(forceAndroidShell: Boolean = false): TerminalSession {
-        val useShell = forceAndroidShell || !prootAvailable()
         val s = TerminalSession(
             id = UUID.randomUUID().toString(),
             context = context,
@@ -132,7 +201,7 @@ class SessionManager(private val context: Context) {
             homeDir = File(context.filesDir, "home")
         )
         sessions.add(s); activeIndex = sessions.size - 1
-        s.start(useShell)
+        s.start(forceAndroidShell)
         return s
     }
 
@@ -143,61 +212,5 @@ class SessionManager(private val context: Context) {
         if (i !in sessions.indices) return
         sessions.removeAt(i).close()
         if (activeIndex >= sessions.size) activeIndex = (sessions.size - 1).coerceAtLeast(0)
-    }
-}
-
-class RootfsInstaller(private val context: Context) {
-    private val url = "https://REPLACE_WITH_REAL_ROOTFS_URL/ubuntu-minimal.tar.gz"
-    private val sha = "REPLACE_WITH_SHA256_HEX"
-
-    suspend fun install(onProgress: (Float) -> Unit): File = kotlinx.coroutines.withContext(Dispatchers.IO) {
-        val root = File(context.filesDir, "ubuntu")
-        val marker = File(root, ".installed")
-        if (marker.exists()) return@withContext root
-        root.mkdirs()
-        val archive = File(context.cacheDir, "ubuntu.tar.gz")
-        download(archive, onProgress)
-        val actual = sha256(archive)
-        if (!actual.equals(sha, ignoreCase = true)) {
-            archive.delete()
-            throw IllegalStateException("Rootfs checksum mismatch: $actual")
-        }
-        extract(archive, root)
-        marker.writeText("ok"); archive.delete()
-        root
-    }
-
-    private fun download(target: File, progress: (Float) -> Unit) {
-        val conn = (URL(url).openConnection() as HttpURLConnection).apply { connectTimeout = 30_000; readTimeout = 60_000 }
-        conn.inputStream.use { input ->
-            FileOutputStream(target).use { out ->
-                val buf = ByteArray(64 * 1024); var total = 0L; val size = conn.contentLengthLong
-                while (true) {
-                    val n = input.read(buf); if (n <= 0) break
-                    out.write(buf, 0, n); total += n
-                    if (size > 0) progress(total.toFloat() / size)
-                }
-            }
-        }
-    }
-
-    private fun sha256(file: File): String {
-        val md = MessageDigest.getInstance("SHA-256")
-        file.inputStream().use { val buf = ByteArray(64 * 1024); while (true) { val n = it.read(buf); if (n <= 0) break; md.update(buf, 0, n) } }
-        return md.digest().joinToString("") { "%02x".format(it) }
-    }
-
-    private fun extract(archive: File, dest: File) {
-        GZIPInputStream(archive.inputStream()).use { gz ->
-            TarArchiveInputStream(gz).use { tar ->
-                var e = tar.nextEntry
-                while (e != null) {
-                    val out = File(dest, e.name)
-                    if (e.isDirectory) out.mkdirs()
-                    else { out.parentFile?.mkdirs(); FileOutputStream(out).use { fos -> tar.copyTo(fos) } }
-                    e = tar.nextEntry
-                }
-            }
-        }
     }
 }
