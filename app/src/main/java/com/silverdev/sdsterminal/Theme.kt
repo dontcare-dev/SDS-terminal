@@ -373,7 +373,7 @@ fun AiScreen() {
     var apiKey by remember { mutableStateOf(prefs.getString("gemini_key", "") ?: "") }
     var showSettings by remember { mutableStateOf(apiKey.isEmpty()) }
     var inputText by remember { mutableStateOf("") }
-    var messages by remember { mutableStateOf(listOf(ChatMessage(false, "Hello. I am the SDS Assistant. I can answer questions or open apps for you. Try: 'open discord'")) }
+    var messages by remember { mutableStateOf(listOf(ChatMessage(false, "Hello. I am the SDS Assistant. I can answer questions or open apps for you. Try: 'open discord'"))) }
     var isTyping by remember { mutableStateOf(false) }
     
     val scope = rememberCoroutineScope()
