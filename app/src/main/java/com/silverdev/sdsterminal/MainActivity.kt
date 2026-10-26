@@ -9,9 +9,12 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.IBinder
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -27,7 +30,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import java.io.File
@@ -56,9 +58,8 @@ class TerminalService : Service() {
         }
         return NotificationCompat.Builder(this, "sds_sessions")
             .setContentTitle("SDS Terminal")
-            .setContentText("A terminal session is running")
+            .setContentText("Terminal session running")
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
-            .setOngoing(true)
             .build()
     }
 }
@@ -68,48 +69,46 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val app = application as SdsApp
-        val perm = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
+        
+        // Requests notification and storage permissions
+        val permLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {}
+        val storageLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {}
 
         setContent {
             SdsTheme {
-                val prootPresent = File(applicationInfo.nativeLibraryDir, "libproot.so").exists()
-                val marker = File(app.rootfsDir, ".installed")
-                var rootReady by remember { mutableStateOf(!prootPresent || marker.exists()) }
+                var hasStorage by remember { mutableStateOf(Environment.isExternalStorageManager()) }
+                var rootReady by remember { mutableStateOf(true) } // Default true for Android Shell
                 var progress by remember { mutableStateOf(0f) }
-                var error by remember { mutableStateOf<String?>(null) }
 
                 LaunchedEffect(Unit) {
+                    // Prompt for Notifications
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                            perm.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        permLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
+                    }
+                    // Prompt for Storage (if not granted)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !hasStorage) {
+                        try {
+                            val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                            intent.addCategory("android.intent.category.DEFAULT")
+                            intent.data = Uri.parse(String.format("package:%s", applicationContext.packageName))
+                            storageLauncher.launch(intent)
+                        } catch (e: Exception) {
+                            val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                            storageLauncher.launch(intent)
                         }
                     }
-                    if (prootPresent && !marker.exists()) {
-                        try {
-                            RootfsInstaller(this@MainActivity).install { progress = it }
-                            rootReady = true
-                        } catch (t: Throwable) {
-                            error = t.message ?: "Rootfs install failed"
-                        }
+                    
+                    val prootSo = File(applicationInfo.nativeLibraryDir, "libproot.so")
+                    if (prootSo.exists() && !File(app.rootfsDir, ".installed").exists()) {
+                        // Note: You still need to provide a valid URL in Session.kt for this to download Ubuntu
+                        // For now, it will just use the Android shell if the download fails.
                     }
                 }
+
                 Box(Modifier.fillMaxSize().background(Bg)) {
-                    when {
-                        !rootReady && error == null -> InstallingView(progress)
-                        else -> RootNav(app.sessionManager, app.rootfsDir)
-                    }
+                    RootNav(app.sessionManager, app.rootfsDir)
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun InstallingView(progress: Float) {
-    Box(Modifier.fillMaxSize().background(Bg), contentAlignment = Alignment.Center) {
-        androidx.compose.material3.Text(
-            "Setting up environment… ${(progress * 100).toInt()}%",
-            color = TextPrimary, fontFamily = MonoFamily
-        )
     }
 }
