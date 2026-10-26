@@ -37,23 +37,35 @@ class TerminalSession(
         if (masterFd >= 0 || isRunning) return
         isRunning = true
         readJob = scope.launch {
-            val isRootfsReady = File(rootfsDir, ".installed_v2").exists()
+            val bashFile = File(rootfsDir, "bin/bash")
+            val isRootfsReady = File(rootfsDir, ".installed_v3").exists() && bashFile.exists()
             
             if (!isRootfsReady && !forceAndroidShell) {
-                feed("\r\n[*] Downloading Ubuntu Rootfs with fixed permissions...\r\n")
+                feed("\r\n[*] Installing Linux environment (Clean)...\r\n")
+                rootfsDir.deleteRecursively()
+                File(rootfsDir, ".installed_v2").delete()
+                File(rootfsDir, ".installed").delete()
+                
                 try {
                     downloadAndExtract { progress ->
                         val percent = (progress * 100).toInt()
                         feed("\rProgress: $percent%")
                     }
-                    feed("\r\n[*] Extraction complete. Starting bash...\r\n\r\n")
+                    
+                    if (bashFile.exists()) {
+                        feed("\r\n[*] Extraction verified. Starting bash...\r\n\r\n")
+                        File(rootfsDir, ".installed_v3").writeText("ok")
+                    } else {
+                        feed("\r\n[!] Extraction failed: /bin/bash missing.\r\n")
+                        forceAndroidShell
+                    }
                 } catch (e: Exception) {
                     feed("\r\n[!] Download failed: ${e.message}\r\n[!] Falling back to Android shell.\r\n\r\n")
                     forceAndroidShell
                 }
             }
 
-            val useShell = forceAndroidShell || !File(rootfsDir, ".installed_v2").exists()
+            val useShell = forceAndroidShell || !File(rootfsDir, ".installed_v3").exists()
             masterFd = if (useShell) launchAndroidShell() else launchProot()
 
             if (masterFd < 0) {
@@ -110,7 +122,6 @@ class TerminalSession(
             }
         }
         archive.delete()
-        File(rootfsDir, ".installed_v2").writeText("ok")
     }
 
     private fun launchProot(): Int {
@@ -125,6 +136,7 @@ class TerminalSession(
 
         val args = mutableListOf(
             "proot",
+            "-0",
             "-r", rootfsDir.absolutePath,
             "-b", "/dev", "-b", "/proc", "-b", "/sys",
             "-b", "${homeDir.absolutePath}:/root", "-w", "/root", "--link2symlink",
