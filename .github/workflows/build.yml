@@ -22,23 +22,17 @@ jobs:
       - name: Install NDK and CMake
         run: sdkmanager "ndk;26.1.10909125" "cmake;3.22.1"
 
-      - name: Download Proot Binaries
+      - name: Download Static Proot Binaries
         run: |
           mkdir -p app/src/main/jniLibs/arm64-v8a
           cd app/src/main/jniLibs/arm64-v8a
           
-          curl -L -o proot.tar.xz https://github.com/chevey339/kelivo/raw/master/dependencies/termux/proot-5.1.107.92.tar.xz
-          tar -xf proot.tar.xz
+          # Download statically linked binaries (no libtalloc required)
+          curl -L -o libproot.so https://raw.githubusercontent.com/ZhymabekRoman/proot-static/main/bin/proot
+          curl -L -o libproot-loader.so https://raw.githubusercontent.com/ZhymabekRoman/proot-static/main/bin/loader
           
-          # Copy all shared libraries from the archive
-          cp arm64-v8a/*.so .
-          
-          # Rename the executable and loader to match Android JNI requirements
-          mv libproot_exec.so libproot.so
-          mv libproot_loader.so libproot-loader.so
-          
-          # Cleanup
-          rm -rf arm64-v8a proot.tar.xz
+          # Make them executable
+          chmod +x libproot.so libproot-loader.so
 
       - uses: gradle/actions/setup-gradle@v4
         with:
