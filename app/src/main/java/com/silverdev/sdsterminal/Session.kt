@@ -37,10 +37,10 @@ class TerminalSession(
         if (masterFd >= 0 || isRunning) return
         isRunning = true
         readJob = scope.launch {
-            val isRootfsReady = File(rootfsDir, ".installed").exists()
+            val isRootfsReady = File(rootfsDir, ".installed_v2").exists()
             
             if (!isRootfsReady && !forceAndroidShell) {
-                feed("\r\n[*] First launch: Downloading Ubuntu Rootfs...\r\n")
+                feed("\r\n[*] Downloading Ubuntu Rootfs with fixed permissions...\r\n")
                 try {
                     downloadAndExtract { progress ->
                         val percent = (progress * 100).toInt()
@@ -53,7 +53,7 @@ class TerminalSession(
                 }
             }
 
-            val useShell = forceAndroidShell || !File(rootfsDir, ".installed").exists()
+            val useShell = forceAndroidShell || !File(rootfsDir, ".installed_v2").exists()
             masterFd = if (useShell) launchAndroidShell() else launchProot()
 
             if (masterFd < 0) {
@@ -100,7 +100,6 @@ class TerminalSession(
                         out.parentFile?.mkdirs()
                         FileOutputStream(out).use { fos -> tar.copyTo(fos) }
                         
-                        // Apply unix permissions (execute bit, read, write)
                         val mode = e.mode
                         if ((mode and 0b001_000_000) != 0) out.setExecutable(true, false)
                         if ((mode and 0b000_100_000) != 0) out.setReadable(true, false)
@@ -111,7 +110,7 @@ class TerminalSession(
             }
         }
         archive.delete()
-        File(rootfsDir, ".installed").writeText("ok")
+        File(rootfsDir, ".installed_v2").writeText("ok")
     }
 
     private fun launchProot(): Int {
@@ -124,7 +123,6 @@ class TerminalSession(
         val hasSdCard = Environment.isExternalStorageManager()
         val bindSdCard = if (hasSdCard) arrayOf("-b", "/storage/emulated/0:/sdcard") else arrayOf()
 
-        // We launch bash directly instead of /usr/bin/env
         val args = mutableListOf(
             "proot",
             "-r", rootfsDir.absolutePath,
@@ -135,7 +133,6 @@ class TerminalSession(
         )
         args.addAll(bindSdCard)
 
-        // Environment variables are passed directly
         val env = arrayOf(
             "PROOT_LOADER=$nativeDir/libproot-loader.so",
             "PROOT_TMP_DIR=${tmpDir.absolutePath}",
