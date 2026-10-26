@@ -4,6 +4,8 @@ import android.app.ActivityManager
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import android.os.Build
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -31,11 +33,13 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.compose.*
 import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -63,8 +67,9 @@ val ImageUrl = "https://i.ibb.co/Z6cSZgYB/favicon.png"
 
 private val DarkColors = darkColorScheme(
     primary = TextPrimary, onPrimary = Bg, secondary = Green,
-    background = Bg, onBackground = TextPrimary,
-    surface = Surface, onSurface = TextPrimary,
+    background = Color.Transparent, onBackground = TextPrimary,
+    surface = Surface.copy(alpha = 0.85f), onSurface = TextPrimary,
+    surfaceVariant = Surface.copy(alpha = 0.85f), onSurfaceVariant = TextSecondary,
     outline = Border, error = Red
 )
 
@@ -79,7 +84,7 @@ fun SdsTheme(bgImageUri: String? = null, content: @Composable () -> Unit) {
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
-                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.85f)))
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)))
             }
             content()
         }
@@ -189,7 +194,7 @@ fun HomeScreen(bgImageUri: String?, onPickImage: () -> Unit, onTerminal: () -> U
         if (bgImageUri == null) {
             Card(
                 modifier = Modifier.fillMaxWidth().clickable { onPickImage() },
-                colors = CardDefaults.cardColors(containerColor = Surface),
+                colors = CardDefaults.cardColors(containerColor = Surface.copy(alpha = 0.85f)),
                 shape = RoundedCornerShape(16.dp),
                 border = BorderStroke(1.dp, Accent)
             ) {
@@ -226,7 +231,7 @@ fun HomeScreen(bgImageUri: String?, onPickImage: () -> Unit, onTerminal: () -> U
 fun ActionCard(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable { onClick() },
-        colors = CardDefaults.cardColors(containerColor = Surface.copy(alpha = 0.6f)),
+        colors = CardDefaults.cardColors(containerColor = Surface.copy(alpha = 0.85f)),
         shape = RoundedCornerShape(16.dp),
         border = BorderStroke(1.dp, Border)
     ) {
@@ -253,7 +258,7 @@ fun FileBrowserScreen(rootDir: File) {
             currentDir.listFiles()?.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() })) ?: emptyList()
         }
     }
-    Column(Modifier.fillMaxSize().background(Bg.copy(alpha = 0.95f))) {
+    Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { currentDir.parentFile?.let { currentDir = it } }, enabled = currentDir != rootDir) {
                 Icon(Icons.Default.ArrowBack, contentDescription = "Up", tint = TextPrimary)
@@ -283,83 +288,179 @@ fun FileBrowserScreen(rootDir: File) {
 @Composable
 fun OptimizationScreen() {
     val context = LocalContext.current
+    val pm = context.packageManager
+    val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+    
+    var allApps by remember { mutableStateOf(listOf<ApplicationInfo>()) }
+    var selectedGame by remember { mutableStateOf<ApplicationInfo?>(null) }
+    var ignoredApps by remember { mutableStateOf(setOf<String>()) }
+    var showIgnoreList by remember { mutableStateOf(false) }
     var toastMsg by remember { mutableStateOf("") }
-    var ramFreed by remember { mutableStateOf(0L) }
+    
+    var totalRam by remember { mutableStateOf(0L) }
+    var usedRam by remember { mutableStateOf(0L) }
 
-    Column(Modifier.fillMaxSize().background(Bg.copy(alpha = 0.95f)).padding(20.dp)) {
-        Text("Game Booster", fontFamily = SansFamily, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-        Text("Optimize your device for maximum performance.", fontSize = 14.sp, color = TextSecondary, modifier = Modifier.padding(top = 8.dp))
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            val apps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
+                .filter { pm.getLaunchIntentForPackage(it.packageName) != null && it.packageName != context.packageName }
+                .sortedBy { it.loadLabel(pm).toString().lowercase() }
+            allApps = apps
+        }
         
-        Spacer(Modifier.height(32.dp))
+        while (true) {
+            val mi = ActivityManager.MemoryInfo()
+            am.getMemoryInfo(mi)
+            totalRam = mi.totalMem / (1024 * 1024)
+            usedRam = (mi.totalMem - mi.availMem) / (1024 * 1024)
+            delay(1000)
+        }
+    }
 
+    Column(Modifier.fillMaxSize().padding(20.dp)) {
+        Text("Game Booster", fontFamily = SansFamily, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+        
         Card(
-            modifier = Modifier.fillMaxWidth().clickable {
-                val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-                val memInfo = ActivityManager.MemoryInfo()
-                am.getMemoryInfo(memInfo)
-                val before = memInfo.availMem
-                
-                val pm = context.packageManager
-                val packages = pm.getInstalledApplications(0)
-                for (pkg in packages) {
-                    if (pkg.packageName != context.packageName) {
-                        am.killBackgroundProcesses(pkg.packageName)
-                    }
-                }
-                
-                am.getMemoryInfo(memInfo)
-                val after = memInfo.availMem
-                ramFreed = (after - before) / (1024 * 1024)
-                toastMsg = "Boosted! Freed ${if (ramFreed > 0) ramFreed else 0} MB of RAM."
-            },
-            colors = CardDefaults.cardColors(containerColor = Surface),
+            Modifier.fillMaxWidth().padding(top = 16.dp),
+            colors = CardDefaults.cardColors(containerColor = Surface.copy(alpha = 0.85f)),
             shape = RoundedCornerShape(16.dp),
             border = BorderStroke(1.dp, Border)
         ) {
-            Row(Modifier.padding(24.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Bolt, contentDescription = null, tint = Green, modifier = Modifier.size(48.dp))
-                Spacer(Modifier.width(16.dp))
-                Column {
-                    Text("Boost Memory", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                    Text("Kill background apps to free up RAM", fontSize = 13.sp, color = TextSecondary, modifier = Modifier.padding(top = 4.dp))
+            Column(Modifier.padding(20.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("System RAM", color = TextSecondary, fontSize = 14.sp)
+                    Text("$usedRam / $totalRam MB", color = TextPrimary, fontFamily = MonoFamily, fontWeight = FontWeight.Bold)
+                }
+                Spacer(Modifier.height(8.dp))
+                val progress = if (totalRam > 0) usedRam.toFloat() / totalRam.toFloat() else 0f
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
+                    color = if (progress > 0.8f) Red else Green,
+                    trackColor = Border
+                )
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+
+        Text("Select Game to Boost", fontFamily = MonoFamily, fontSize = 12.sp, color = TextTertiary, letterSpacing = 1.sp)
+        Spacer(Modifier.height(8.dp))
+        
+        Card(
+            Modifier.fillMaxWidth().heightIn(max = 200.dp),
+            colors = CardDefaults.cardColors(containerColor = Surface.copy(alpha = 0.85f)),
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(1.dp, Border)
+        ) {
+            LazyColumn {
+                items(allApps) { app ->
+                    val isSelected = selectedGame?.packageName == app.packageName
+                    Row(
+                        Modifier.fillMaxWidth().clickable { selectedGame = app }
+                            .background(if (isSelected) Surface else Color.Transparent)
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            pm.getApplicationIcon(app),
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            app.loadLabel(pm).toString(),
+                            color = TextPrimary,
+                            fontSize = 14.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (isSelected) Icon(Icons.Default.Check, contentDescription = null, tint = Green)
+                    }
+                    HorizontalDivider(color = Border)
                 }
             }
         }
 
         Spacer(Modifier.height(16.dp))
 
-        Card(
-            modifier = Modifier.fillMaxWidth().clickable {
-                val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    if (notificationManager.isNotificationPolicyAccessGranted) {
-                        notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
-                        toastMsg = "Do Not Disturb enabled. Have fun gaming!"
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Button(
+                onClick = { showIgnoreList = !showIgnoreList },
+                modifier = Modifier.weight(1f).height(48.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Surface.copy(alpha = 0.85f), contentColor = TextPrimary),
+                shape = RoundedCornerShape(8.dp),
+                border = BorderStroke(1.dp, Border)
+            ) {
+                Text("Ignore List (${ignoredApps.size})", fontSize = 14.sp)
+            }
+            
+            Button(
+                onClick = {
+                    if (selectedGame == null) {
+                        toastMsg = "Select a game first!"
                     } else {
-                        val intent = Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
-                        context.startActivity(intent)
-                        toastMsg = "Please grant DND access in settings."
+                        val targetPkg = selectedGame!!.packageName
+                        var killed = 0
+                        for (app in allApps) {
+                            if (app.packageName != targetPkg && app.packageName != context.packageName && !ignoredApps.contains(app.packageName)) {
+                                am.killBackgroundProcesses(app.packageName)
+                                killed++
+                            }
+                        }
+                        toastMsg = "Boosted! Cleared $killed apps. Launching ${selectedGame!!.loadLabel(pm)}..."
+                        val intent = pm.getLaunchIntentForPackage(targetPkg)
+                        if (intent != null) context.startActivity(intent)
                     }
-                }
-            },
-            colors = CardDefaults.cardColors(containerColor = Surface),
-            shape = RoundedCornerShape(16.dp),
-            border = BorderStroke(1.dp, Border)
-        ) {
-            Row(Modifier.padding(24.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.DoNotDisturb, contentDescription = null, tint = Red, modifier = Modifier.size(48.dp))
-                Spacer(Modifier.width(16.dp))
-                Column {
-                    Text("Do Not Disturb", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                    Text("Block notifications while gaming", fontSize = 13.sp, color = TextSecondary, modifier = Modifier.padding(top = 4.dp))
-                }
+                },
+                modifier = Modifier.weight(1f).height(48.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Green, contentColor = Bg),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("Boost & Launch", fontWeight = FontWeight.Bold, fontSize = 14.sp)
             }
         }
 
         if (toastMsg.isNotEmpty()) {
-            Spacer(Modifier.height(24.dp))
-            Text(toastMsg, fontFamily = MonoFamily, fontSize = 14.sp, color = Green, modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            Spacer(Modifier.height(16.dp))
+            Text(toastMsg, color = Green, fontSize = 13.sp, fontFamily = MonoFamily, modifier = Modifier.fillMaxWidth())
         }
+    }
+
+    if (showIgnoreList) {
+        AlertDialog(
+            onDismissRequest = { showIgnoreList = false },
+            title = { Text("Ignore List", color = TextPrimary) },
+            text = {
+                LazyColumn(Modifier.heightIn(max = 300.dp)) {
+                    items(allApps) { app ->
+                        val isIgnored = ignoredApps.contains(app.packageName)
+                        Row(
+                            Modifier.fillMaxWidth().clickable {
+                                ignoredApps = if (isIgnored) ignoredApps - app.packageName else ignoredApps + app.packageName
+                            }.padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = isIgnored,
+                                onCheckedChange = { 
+                                    ignoredApps = if (it) ignoredApps + app.packageName else ignoredApps - app.packageName 
+                                },
+                                colors = CheckboxDefaults.colors(checkedColor = Green)
+                            )
+                            Text(app.loadLabel(pm).toString(), color = TextPrimary, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showIgnoreList = false }) {
+                    Text("Done", color = Green)
+                }
+            },
+            containerColor = Surface
+        )
     }
 }
 
@@ -416,7 +517,7 @@ fun AiScreen() {
         }
     }
 
-    Column(Modifier.fillMaxSize().background(Bg.copy(alpha = 0.95f)).padding(16.dp)) {
+    Column(Modifier.fillMaxSize().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Text("AI Assistant", fontFamily = SansFamily, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = TextPrimary, modifier = Modifier.weight(1f))
             IconButton(onClick = { showSettings = !showSettings }) {
@@ -456,7 +557,7 @@ fun AiScreen() {
                         fontSize = 14.sp,
                         color = if (msg.isUser) Bg else TextPrimary,
                         modifier = Modifier
-                            .background(if (msg.isUser) TextPrimary else Surface)
+                            .background(if (msg.isUser) TextPrimary else Surface.copy(alpha = 0.85f))
                             .border(1.dp, if (msg.isUser) Color.Transparent else Border, RoundedCornerShape(8.dp))
                             .padding(12.dp)
                     )
@@ -475,7 +576,7 @@ fun AiScreen() {
                 onValueChange = { inputText = it },
                 textStyle = androidx.compose.ui.text.TextStyle(fontFamily = MonoFamily, fontSize = 14.sp, color = TextPrimary),
                 cursorBrush = SolidColor(TextPrimary),
-                modifier = Modifier.weight(1f).background(Surface).border(1.dp, Border, RoundedCornerShape(8.dp)).padding(12.dp),
+                modifier = Modifier.weight(1f).background(Surface.copy(alpha = 0.85f)).border(1.dp, Border, RoundedCornerShape(8.dp)).padding(12.dp),
                 decorationBox = { inner ->
                     if (inputText.isEmpty()) Text("Ask anything or 'open youtube'...", fontFamily = MonoFamily, fontSize = 14.sp, color = TextTertiary)
                     inner()
@@ -531,7 +632,7 @@ suspend fun callGemini(client: OkHttpClient, apiKey: String, prompt: String): St
 
 @Composable
 fun SecurityScreen(bgImageUri: String?, onPickImage: () -> Unit) {
-    Column(Modifier.fillMaxSize().background(Bg.copy(alpha = 0.95f)).verticalScroll(rememberScrollState()).padding(20.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
         Text("Settings", fontFamily = SansFamily, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
         
         Spacer(Modifier.height(32.dp))
@@ -540,7 +641,7 @@ fun SecurityScreen(bgImageUri: String?, onPickImage: () -> Unit) {
         Spacer(Modifier.height(12.dp))
         Card(
             modifier = Modifier.fillMaxWidth().clickable { onPickImage() },
-            colors = CardDefaults.cardColors(containerColor = Surface),
+            colors = CardDefaults.cardColors(containerColor = Surface.copy(alpha = 0.85f)),
             shape = RoundedCornerShape(12.dp),
             border = BorderStroke(1.dp, Border)
         ) {
@@ -558,7 +659,7 @@ fun SecurityScreen(bgImageUri: String?, onPickImage: () -> Unit) {
         Spacer(Modifier.height(12.dp))
         Card(
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = Surface),
+            colors = CardDefaults.cardColors(containerColor = Surface.copy(alpha = 0.85f)),
             shape = RoundedCornerShape(12.dp),
             border = BorderStroke(1.dp, Border)
         ) {
@@ -602,7 +703,7 @@ fun RootNav(manager: SessionManager, rootDir: File, bgImageUri: String?, onPickI
         if (current != "home" && current != "terminal") {
             Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.TopEnd) {
                 Box(
-                    Modifier.size(48.dp).clip(CircleShape).background(Surface).border(1.dp, Border, CircleShape)
+                    Modifier.size(48.dp).clip(CircleShape).background(Surface.copy(alpha = 0.85f)).border(1.dp, Border, CircleShape)
                         .clickable { nav.navigate("home") { launchSingleTop = true } },
                     contentAlignment = Alignment.Center
                 ) {
