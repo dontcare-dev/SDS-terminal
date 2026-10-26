@@ -26,9 +26,9 @@ jobs:
         run: |
           mkdir -p app/src/main/jniLibs/arm64-v8a
           cd app/src/main/jniLibs/arm64-v8a
-          # Use aarch64 for 64-bit ARM devices
-          curl -L -o proot.deb https://packages.termux.dev/apt/termux-main/pool/main/p/proot/proot_5.1.107-67_aarch64.deb
-          curl -L -o talloc.deb https://packages.termux.dev/apt/termux-main/pool/main/libt/libtalloc/libtalloc_2.4.1_aarch64.deb
+          # Using the current live package versions from the Termux mirror
+          curl -L -o proot.deb https://mirror.bouwhuis.network/termux/apt/apt/apt/termux-main/pool/main/p/proot/proot_5.1.107.98_aarch64.deb
+          curl -L -o talloc.deb https://mirror.bouwhuis.network/termux/apt/apt/termux-main/pool/main/libt/libtalloc/libtalloc_2.4.3_aarch64.deb
           ar x proot.deb
           ar x talloc.deb
           tar -xf data.tar.xz
