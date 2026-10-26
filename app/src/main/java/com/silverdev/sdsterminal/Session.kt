@@ -7,7 +7,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import java.io.File
@@ -69,7 +68,7 @@ class TerminalSession(
 
     private suspend fun readLoop() {
         val buf = ByteArray(8192)
-        while (isActive && masterFd >= 0) {
+        while (masterFd >= 0) {
             val n = PtyNative.read(masterFd, buf)
             if (n > 0) { parser.feed(buf, n); buffer.bump() }
             else if (n < 0) break
