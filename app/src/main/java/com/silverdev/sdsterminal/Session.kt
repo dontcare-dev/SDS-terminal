@@ -124,9 +124,9 @@ class TerminalSession(
             "/bin/bash", "--login"
         ))
 
+        // Static binary only needs the loader path
         val env = arrayOf(
-            "PROOT_LOADER=$nativeDir/libproot-loader.so",
-            "LD_LIBRARY_PATH=$nativeDir"
+            "PROOT_LOADER=$nativeDir/libproot-loader.so"
         )
 
         val fd = PtyNative.openPty("$nativeDir/libproot.so", args.toTypedArray(), env)
