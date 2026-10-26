@@ -22,21 +22,20 @@ jobs:
       - name: Install NDK and CMake
         run: sdkmanager "ndk;26.1.10909125" "cmake;3.22.1"
 
-      - name: Download Proot Binaries from Pinned GitHub Archive
+      - name: Download Proot Binaries
         run: |
           mkdir -p app/src/main/jniLibs/arm64-v8a
           cd app/src/main/jniLibs/arm64-v8a
           
-          # Download a known-good archive hosted on GitHub
           curl -L -o proot.tar.xz https://github.com/chevey339/kelivo/raw/master/dependencies/termux/proot-5.1.107.92.tar.xz
-          
-          # Extract the archive
           tar -xf proot.tar.xz
           
-          # The archive contains arm64-v8a/ with the exact files we need
-          cp arm64-v8a/libproot_exec.so libproot.so
-          cp arm64-v8a/libproot_loader.so libproot-loader.so
-          cp arm64-v8a/libtalloc.so libtalloc.so
+          # Copy all shared libraries from the archive
+          cp arm64-v8a/*.so .
+          
+          # Rename the executable and loader to match Android JNI requirements
+          mv libproot_exec.so libproot.so
+          mv libproot_loader.so libproot-loader.so
           
           # Cleanup
           rm -rf arm64-v8a proot.tar.xz
