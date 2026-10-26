@@ -108,10 +108,14 @@ class TerminalSession(
         val nativeDir = context.applicationInfo.nativeLibraryDir
         homeDir.mkdirs()
         
+        val tmpDir = File(context.filesDir, "tmp")
+        tmpDir.mkdirs()
+
         val hasSdCard = Environment.isExternalStorageManager()
         val bindSdCard = if (hasSdCard) arrayOf("-b", "/storage/emulated/0:/sdcard") else arrayOf()
 
         val args = mutableListOf(
+            "proot",
             "-r", rootfsDir.absolutePath,
             "-b", "/dev", "-b", "/proc", "-b", "/sys",
             "-b", "${homeDir.absolutePath}:/root", "-w", "/root", "--link2symlink",
@@ -124,9 +128,9 @@ class TerminalSession(
             "/bin/bash", "--login"
         ))
 
-        // Static binary only needs the loader path
         val env = arrayOf(
-            "PROOT_LOADER=$nativeDir/libproot-loader.so"
+            "PROOT_LOADER=$nativeDir/libproot-loader.so",
+            "PROOT_TMP_DIR=${tmpDir.absolutePath}"
         )
 
         val fd = PtyNative.openPty("$nativeDir/libproot.so", args.toTypedArray(), env)
