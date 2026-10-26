@@ -34,11 +34,17 @@ class TerminalSession(
         private set
 
     fun start(useAndroidShell: Boolean = false) {
-        if (masterFd >= 0) return
-        masterFd = if (useAndroidShell) launchAndroidShell() else launchProot()
-        if (masterFd < 0) { feed("\r\n[Failed to start session]\r\n"); return }
+        if (masterFd >= 0 || isRunning) return
         isRunning = true
-        readJob = scope.launch { readLoop() }
+        readJob = scope.launch {
+            masterFd = if (useAndroidShell) launchAndroidShell() else launchProot()
+            if (masterFd < 0) {
+                feed("\r\n[Failed to start session]\r\n")
+                isRunning = false
+                return@launch
+            }
+            readLoop()
+        }
     }
 
     private fun launchProot(): Int {
@@ -70,9 +76,15 @@ class TerminalSession(
         val buf = ByteArray(8192)
         while (masterFd >= 0) {
             val n = PtyNative.read(masterFd, buf)
-            if (n > 0) { parser.feed(buf, n); buffer.bump() }
-            else if (n < 0) break
-            else delay(16)
+            if (n > 0) {
+                parser.feed(buf, n)
+                buffer.bump()
+                delay(16) // Throttle UI updates to prevent freezing during heavy output
+            } else if (n < 0) {
+                break
+            } else {
+                delay(16)
+            }
         }
         isRunning = false
         feed("\r\n[Session ended]\r\n")
