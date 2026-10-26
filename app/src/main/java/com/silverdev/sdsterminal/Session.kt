@@ -94,8 +94,18 @@ class TerminalSession(
                 var e = tar.nextEntry
                 while (e != null) {
                     val out = File(rootfsDir, e.name)
-                    if (e.isDirectory) out.mkdirs()
-                    else { out.parentFile?.mkdirs(); FileOutputStream(out).use { fos -> tar.copyTo(fos) } }
+                    if (e.isDirectory) {
+                        out.mkdirs()
+                    } else {
+                        out.parentFile?.mkdirs()
+                        FileOutputStream(out).use { fos -> tar.copyTo(fos) }
+                        
+                        // Apply unix permissions (execute bit, read, write)
+                        val mode = e.mode
+                        if ((mode and 0b001_000_000) != 0) out.setExecutable(true, false)
+                        if ((mode and 0b000_100_000) != 0) out.setReadable(true, false)
+                        if ((mode and 0b000_010_000) != 0) out.setWritable(true, false)
+                    }
                     e = tar.nextEntry
                 }
             }
@@ -114,23 +124,25 @@ class TerminalSession(
         val hasSdCard = Environment.isExternalStorageManager()
         val bindSdCard = if (hasSdCard) arrayOf("-b", "/storage/emulated/0:/sdcard") else arrayOf()
 
+        // We launch bash directly instead of /usr/bin/env
         val args = mutableListOf(
             "proot",
             "-r", rootfsDir.absolutePath,
             "-b", "/dev", "-b", "/proc", "-b", "/sys",
             "-b", "${homeDir.absolutePath}:/root", "-w", "/root", "--link2symlink",
-            "-b", "${context.applicationInfo.nativeLibraryDir}:/data/data/com.termux/files/usr/libexec"
+            "-b", "${context.applicationInfo.nativeLibraryDir}:/data/data/com.termux/files/usr/libexec",
+            "/bin/bash", "--login"
         )
         args.addAll(bindSdCard)
-        args.addAll(arrayOf(
-            "/usr/bin/env", "-i", "HOME=/root", "TERM=xterm-256color", "LANG=C.UTF-8",
-            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-            "/bin/bash", "--login"
-        ))
 
+        // Environment variables are passed directly
         val env = arrayOf(
             "PROOT_LOADER=$nativeDir/libproot-loader.so",
-            "PROOT_TMP_DIR=${tmpDir.absolutePath}"
+            "PROOT_TMP_DIR=${tmpDir.absolutePath}",
+            "HOME=/root",
+            "TERM=xterm-256color",
+            "LANG=C.UTF-8",
+            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
         )
 
         val fd = PtyNative.openPty("$nativeDir/libproot.so", args.toTypedArray(), env)
