@@ -15,14 +15,15 @@ import android.os.Environment
 import android.os.IBinder
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.Modifier
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.core.app.NotificationCompat
 import java.io.File
 
@@ -61,31 +62,54 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val app = application as SdsApp
+        val prefs = getSharedPreferences("sds_prefs", Context.MODE_PRIVATE)
         
-        val permLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {}
-        val storageLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {}
-
         setContent {
-            SdsTheme {
-                LaunchedEffect(Unit) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        permLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
-                    }
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
-                        try {
-                            val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                            intent.addCategory("android.intent.category.DEFAULT")
-                            intent.data = Uri.parse(String.format("package:%s", applicationContext.packageName))
-                            storageLauncher.launch(intent)
-                        } catch (e: Exception) {
-                            storageLauncher.launch(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+            var bgImageUri by remember { mutableStateOf<String?>(prefs.getString("bg_image", null)) }
+            var hasStoragePermission by remember { mutableStateOf(Environment.isExternalStorageManager()) }
+
+            val storageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+                hasStoragePermission = Environment.isExternalStorageManager()
+            }
+
+            val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+                if (uri != null) {
+                    try {
+                        contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    } catch (e: Exception) {}
+                    bgImageUri = uri.toString()
+                    prefs.edit().putString("bg_image", bgImageUri).apply()
+                }
+            }
+
+            val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {}
+
+            LaunchedEffect(Unit) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    permLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
+                }
+            }
+
+            SdsTheme(bgImageUri = bgImageUri) {
+                RootNav(
+                    manager = app.sessionManager,
+                    rootDir = app.rootfsDir,
+                    bgImageUri = bgImageUri,
+                    onPickImage = {
+                        if (!hasStoragePermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            try {
+                                val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                                intent.addCategory("android.intent.category.DEFAULT")
+                                intent.data = Uri.parse(String.format("package:%s", applicationContext.packageName))
+                                storageLauncher.launch(intent)
+                            } catch (e: Exception) {
+                                storageLauncher.launch(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+                            }
+                        } else {
+                            imagePicker.launch("image/*")
                         }
                     }
-                }
-                
-                Box(Modifier.fillMaxSize().background(Bg)) {
-                    RootNav(app.sessionManager, app.rootfsDir)
-                }
+                )
             }
         }
     }
