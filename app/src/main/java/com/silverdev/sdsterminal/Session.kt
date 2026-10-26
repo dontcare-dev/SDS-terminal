@@ -40,7 +40,7 @@ class TerminalSession(
             val isRootfsReady = File(rootfsDir, ".installed").exists()
             
             if (!isRootfsReady && !forceAndroidShell) {
-                feed("\r\n[*] First launch: Downloading Ubuntu Rootfs (approx 30MB)...\r\n")
+                feed("\r\n[*] First launch: Downloading Ubuntu Rootfs...\r\n")
                 try {
                     downloadAndExtract { progress ->
                         val percent = (progress * 100).toInt()
@@ -124,7 +124,6 @@ class TerminalSession(
             "/bin/bash", "--login"
         ))
 
-        // Set LD_LIBRARY_PATH so the linker can find libtalloc.so
         val env = arrayOf(
             "PROOT_LOADER=$nativeDir/libproot-loader.so",
             "LD_LIBRARY_PATH=$nativeDir"
