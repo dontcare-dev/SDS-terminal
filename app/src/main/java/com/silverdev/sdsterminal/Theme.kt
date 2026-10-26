@@ -15,7 +15,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.layout.ContentScale
@@ -38,11 +37,10 @@ val TextTertiary = Color(0xFF6A6A73)
 val TextQuaternary = Color(0xFF45454D)
 val Green = Color(0xFF3ECF8E)
 val Red = Color(0xFFF2555A)
-val DisplayFamily = FontFamily.Cursive // Fallback for Chewy
+val DisplayFamily = FontFamily.Cursive
 val MonoFamily = FontFamily.Monospace
 val TerminalBlack = Color(0xFF0D0D0D)
 val TerminalExtraRow = Color(0xFF101114)
-val ImageUrl = "https://i.ibb.co/Z6cSZgYB/favicon.png"
 
 private val DarkColors = darkColorScheme(
     primary = TextPrimary, onPrimary = Bg, secondary = Green,
@@ -53,33 +51,21 @@ private val DarkColors = darkColorScheme(
 )
 
 @Composable
-fun SdsTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = DarkColors, content = content)
-}
-
-@Composable
-fun SdsLogo(size: Int = 26, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier.size(size.dp).clip(RoundedCornerShape(8.dp))
-            .background(Surface2).border(1.dp, Border2, RoundedCornerShape(8.dp)),
-        contentAlignment = Alignment.Center
-    ) {
-        AsyncImage(
-            model = ImageUrl,
-            contentDescription = "Logo",
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp))
-        )
+fun SdsTheme(bgImageUri: String? = null, content: @Composable () -> Unit) {
+    MaterialTheme(colorScheme = DarkColors) {
+        Box(Modifier.fillMaxSize().background(Bg)) {
+            if (bgImageUri != null) {
+                AsyncImage(
+                    model = bgImageUri,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.75f)))
+            }
+            content()
+        }
     }
-}
-
-@Composable
-fun Pill(text: String, modifier: Modifier = Modifier, textColor: Color = TextTertiary) {
-    Text(
-        text, color = textColor, fontFamily = MonoFamily, fontSize = 9.5.sp,
-        modifier = modifier.clip(RoundedCornerShape(999.dp)).background(Surface)
-            .border(1.dp, Border, RoundedCornerShape(999.dp)).padding(horizontal = 7.dp, vertical = 2.dp)
-    )
 }
 
 data class NavItem(val label: String, val onClick: () -> Unit)
@@ -94,7 +80,13 @@ fun SdsNav(title: String, items: List<NavItem>, modifier: Modifier = Modifier) {
                 .padding(start = 8.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            SdsLogo(34)
+            Box(
+                modifier = Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
+                    .background(Surface2).border(1.dp, Border2, RoundedCornerShape(10.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.Terminal, contentDescription = null, tint = TextPrimary, modifier = Modifier.size(18.dp))
+            }
             Spacer(Modifier.width(12.dp))
             Text(title, color = TextPrimary, fontFamily = DisplayFamily, fontSize = 20.sp, modifier = Modifier.weight(1f))
             Box(
@@ -103,7 +95,6 @@ fun SdsNav(title: String, items: List<NavItem>, modifier: Modifier = Modifier) {
             ) { Icon(Icons.Default.Menu, contentDescription = "Menu", tint = TextPrimary) }
         }
         
-        // Dropdown Menu
         if (open) {
             Spacer(Modifier.height(60.dp))
             Column(
@@ -203,93 +194,55 @@ private fun handleKey(event: KeyEvent, session: TerminalSession): Boolean {
 }
 
 @Composable
-fun HomeScreen(onTerminal: () -> Unit, onFiles: () -> Unit, onPackages: () -> Unit, onSecurity: () -> Unit) {
+fun HomeScreen(bgImageUri: String?, onPickImage: () -> Unit, onTerminal: () -> Unit, onFiles: () -> Unit, onPackages: () -> Unit, onSecurity: () -> Unit) {
     val tiles = listOf(
         Triple("Terminal", Icons.Default.Terminal, onTerminal),
-        Triple("File Browser", Icons.Default.Folder, onFiles),
-        Triple("Linux Packages", Icons.Default.Memory, onPackages),
-        Triple("Permissions", Icons.Default.Security, onSecurity)
+        Triple("Files", Icons.Default.Folder, onFiles),
+        Triple("Packages", Icons.Default.Memory, onPackages),
+        Triple("Settings", Icons.Default.Settings, onSecurity)
     )
     
-    Box(Modifier.fillMaxSize().background(Bg)) {
-        // Soft, premium radial gradient background
-        Box(Modifier.fillMaxSize().background(Brush.radialGradient(
-            colors = listOf(Color(0xFF1A1A24), Bg),
-            center = androidx.compose.ui.geometry.Offset(0f, 0f),
-            radius = 1500f
-        )))
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-            
-            // Hero Section with Image
+        // If no background is set, prompt for it immediately
+        if (bgImageUri == null) {
             Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Surface.copy(alpha = 0.4f))
-                    .border(1.dp, Border2, RoundedCornerShape(20.dp)).padding(20.dp),
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Surface.copy(alpha = 0.6f))
+                    .border(1.dp, Border2, RoundedCornerShape(16.dp)).clickable { onPickImage() }
+                    .padding(20.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                AsyncImage(
-                    model = ImageUrl,
-                    contentDescription = "SDS Logo",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(72.dp).clip(RoundedCornerShape(16.dp)).border(1.dp, Border2, RoundedCornerShape(16.dp))
-                )
+                Box(Modifier.size(48.dp).clip(CircleShape).background(Surface2), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.Image, contentDescription = null, tint = TextPrimary, modifier = Modifier.size(24.dp))
+                }
                 Spacer(Modifier.width(16.dp))
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("SDS Terminal", color = TextPrimary, fontFamily = DisplayFamily, fontSize = 28.sp)
-                        Spacer(Modifier.width(8.dp))
-                        Pill("v1.0")
+                Column(Modifier.weight(1f)) {
+                    Text("Set custom background", color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                    Text("Tap to select an image from your gallery", color = TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+                }
+                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextQuaternary)
+            }
+            Spacer(Modifier.height(32.dp))
+        }
+        
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            tiles.forEach { (label, icon, onClick) ->
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Surface.copy(alpha = 0.6f))
+                        .border(1.dp, Border2, RoundedCornerShape(16.dp)).clickable { onClick() }
+                        .padding(horizontal = 20.dp, vertical = 18.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(Modifier.size(36.dp).clip(CircleShape).background(Surface2), contentAlignment = Alignment.Center) {
+                        Icon(icon, null, tint = TextPrimary, modifier = Modifier.size(18.dp))
                     }
-                    Text("A premium native Android terminal.", color = TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
-                        Box(Modifier.size(6.dp).clip(CircleShape).background(Green))
-                        Spacer(Modifier.width(6.dp))
-                        Text("System Ready", color = Green, fontFamily = MonoFamily, fontSize = 11.sp)
-                    }
+                    Spacer(Modifier.width(16.dp))
+                    Text(label, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                    Text("→", color = TextQuaternary, fontFamily = MonoFamily, fontSize = 16.sp)
                 }
             }
-            
-            Spacer(Modifier.height(32.dp)); SectionLabel("Quick Actions")
-            
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                tiles.forEach { (label, icon, onClick) ->
-                    Row(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Surface.copy(alpha = 0.6f))
-                            .border(1.dp, Border2, RoundedCornerShape(16.dp)).clickable { onClick() }
-                            .padding(horizontal = 20.dp, vertical = 18.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(Modifier.size(36.dp).clip(CircleShape).background(Surface2), contentAlignment = Alignment.Center) {
-                            Icon(icon, null, tint = TextPrimary, modifier = Modifier.size(18.dp))
-                        }
-                        Spacer(Modifier.width(16.dp))
-                        Text(label, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                        Text("→", color = TextQuaternary, fontFamily = MonoFamily, fontSize = 16.sp)
-                    }
-                }
-            }
-            
-            Spacer(Modifier.height(32.dp)); SectionLabel("Environment")
-            Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Surface.copy(alpha = 0.6f))
-                    .border(1.dp, Border2, RoundedCornerShape(16.dp)).padding(20.dp)
-            ) {
-                Text(
-                    "SDS Terminal runs a full Ubuntu Linux userspace in userspace using proot. No root required. On first launch, it will silently download and extract Linux directly inside the terminal.",
-                    color = TextSecondary, fontSize = 13.sp, lineHeight = 22.sp
-                )
-            }
-            Spacer(Modifier.height(24.dp))
         }
     }
-}
-
-@Composable
-private fun SectionLabel(text: String) {
-    Text(
-        text.uppercase(), color = TextQuaternary, fontFamily = MonoFamily, fontSize = 11.sp,
-        letterSpacing = 1.6.sp, modifier = Modifier.padding(bottom = 12.dp, start = 4.dp)
-    )
 }
 
 @Composable
@@ -301,7 +254,7 @@ fun FileBrowserScreen(rootDir: File) {
             currentDir.listFiles()?.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() })) ?: emptyList()
         }
     }
-    Column(Modifier.fillMaxSize().background(Bg)) {
+    Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { currentDir.parentFile?.let { currentDir = it } }, enabled = currentDir != rootDir) {
                 Icon(Icons.Default.ArrowBack, contentDescription = "Up", tint = TextPrimary)
@@ -328,61 +281,78 @@ fun FileBrowserScreen(rootDir: File) {
 }
 
 @Composable
-fun SecurityScreen() {
-    Column(Modifier.fillMaxSize().background(Bg).verticalScroll(rememberScrollState()).padding(20.dp)) {
-        Text("Permissions", fontFamily = DisplayFamily, fontSize = 26.sp, color = TextPrimary)
-        Text(
-            "SDS Terminal runs a Linux userspace inside proot. It does not grant root access to the Android system. Commands only run when typed.",
-            fontSize = 14.sp, color = TextSecondary, lineHeight = 24.sp, modifier = Modifier.padding(top = 16.dp)
-        )
-        Text("Storage Access", fontSize = 18.sp, fontFamily = DisplayFamily, color = TextPrimary, modifier = Modifier.padding(top = 32.dp))
-        Text(
-            "To access your Android files (like /sdcard) inside the Linux environment, you must grant 'All Files Access' when prompted by Android.",
-            fontSize = 14.sp, color = TextSecondary, lineHeight = 24.sp, modifier = Modifier.padding(top = 12.dp)
-        )
+fun SecurityScreen(bgImageUri: String?, onPickImage: () -> Unit) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
+        Text("Settings", fontFamily = DisplayFamily, fontSize = 26.sp, color = TextPrimary)
+        
+        Spacer(Modifier.height(24.dp))
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Surface.copy(alpha = 0.6f))
+                .border(1.dp, Border2, RoundedCornerShape(16.dp)).clickable { onPickImage() }
+                .padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.Image, contentDescription = null, tint = TextPrimary, modifier = Modifier.size(24.dp))
+            Spacer(Modifier.width(16.dp))
+            Text("Change Background Image", color = TextPrimary, fontSize = 15.sp, modifier = Modifier.weight(1f))
+        }
+        
+        Spacer(Modifier.height(16.dp))
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Surface.copy(alpha = 0.6f))
+                .border(1.dp, Border2, RoundedCornerShape(16.dp)).padding(20.dp)
+        ) {
+            Text("Storage Access", fontSize = 16.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
+            Text(
+                "To access Android files (like /sdcard) inside the Linux environment, you must grant 'All Files Access' when prompted.",
+                fontSize = 14.sp, color = TextSecondary, lineHeight = 24.sp, modifier = Modifier.padding(top = 8.dp)
+            )
+        }
     }
 }
 
 @Composable
 fun PackagesScreen(onInstall: (String) -> Unit) {
     var pkg by remember { mutableStateOf("") }
-    Column(Modifier.fillMaxSize().background(Bg).imePadding().padding(20.dp)) {
-        Text("Package Manager", fontFamily = DisplayFamily, fontSize = 26.sp, color = TextPrimary)
-        Text("Install packages inside the Ubuntu environment using apt.", fontSize = 14.sp, color = TextSecondary, modifier = Modifier.padding(top = 8.dp, bottom = 24.dp))
+    Column(Modifier.fillMaxSize().imePadding().padding(20.dp)) {
+        Text("Packages", fontFamily = DisplayFamily, fontSize = 26.sp, color = TextPrimary)
+        Text("Install packages inside Ubuntu using apt.", fontSize = 14.sp, color = TextSecondary, modifier = Modifier.padding(top = 8.dp, bottom = 24.dp))
         
-        androidx.compose.material3.OutlinedTextField(
+        OutlinedTextField(
             value = pkg, onValueChange = { pkg = it }, label = { Text("Package name (e.g. python3)") },
             singleLine = true, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth(),
-            colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Green,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = TextPrimary,
                 unfocusedBorderColor = Border2,
                 focusedTextColor = TextPrimary,
                 unfocusedTextColor = TextPrimary
             )
         )
-        androidx.compose.material3.Button(
+        Button(
             onClick = { if (pkg.isNotBlank()) onInstall(pkg.trim()) },
             modifier = Modifier.padding(top = 16.dp).fillMaxWidth().height(50.dp),
-            colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = TextPrimary, contentColor = Bg),
+            colors = ButtonDefaults.buttonColors(containerColor = TextPrimary, contentColor = Bg),
             shape = RoundedCornerShape(12.dp)
-        ) { Text("Install Package", fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold) }
+        ) { Text("Install", fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold) }
     }
 }
 
 @Composable
-fun RootNav(manager: SessionManager, rootDir: File) {
+fun RootNav(manager: SessionManager, rootDir: File, bgImageUri: String?, onPickImage: () -> Unit) {
     val nav = rememberNavController()
     val back by nav.currentBackStackEntryAsState()
     val current = back?.destination?.route ?: "home"
     val showNav = current != "terminal"
     
-    Box(Modifier.fillMaxSize().background(Bg)) {
+    Box(Modifier.fillMaxSize()) {
         NavHost(
             navController = nav, startDestination = "home",
             modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(top = if (showNav) 76.dp else 0.dp)
         ) {
             composable("home") {
                 HomeScreen(
+                    bgImageUri = bgImageUri,
+                    onPickImage = onPickImage,
                     onTerminal = { nav.navigate("terminal") },
                     onFiles = { nav.navigate("files") },
                     onPackages = { nav.navigate("packages") },
@@ -398,18 +368,17 @@ fun RootNav(manager: SessionManager, rootDir: File) {
                     nav.navigate("terminal")
                 }
             }
-            composable("security") { SecurityScreen() }
+            composable("security") { SecurityScreen(bgImageUri, onPickImage) }
         }
         
-        // Floating Web-Style Nav Bar
         if (showNav) {
             Box(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 16.dp, vertical = 12.dp)) {
-                SdsNav("SDS Terminal", listOf(
+                SdsNav("Terminal", listOf(
                     NavItem("Home") { if (current != "home") nav.navigate("home") { launchSingleTop = true } },
                     NavItem("Terminal") { nav.navigate("terminal") { launchSingleTop = true } },
-                    NavItem("File Browser") { nav.navigate("files") { launchSingleTop = true } },
-                    NavItem("Linux Packages") { nav.navigate("packages") { launchSingleTop = true } },
-                    NavItem("Permissions") { nav.navigate("security") { launchSingleTop = true } }
+                    NavItem("Files") { nav.navigate("files") { launchSingleTop = true } },
+                    NavItem("Packages") { nav.navigate("packages") { launchSingleTop = true } },
+                    NavItem("Settings") { nav.navigate("security") { launchSingleTop = true } }
                 ))
             }
         }
