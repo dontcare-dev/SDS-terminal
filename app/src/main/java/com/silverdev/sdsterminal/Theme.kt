@@ -38,15 +38,12 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
@@ -63,13 +60,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import kotlinx.coroutines.delay
 import java.io.File
-import kotlin.math.cos
-import kotlin.math.exp
-import kotlin.math.floor
-import kotlin.math.sin
-import kotlin.math.sqrt
 
 val Bg = Color(0xFF050505)
 val Surface = Color(0xFF0A0A0B)
@@ -109,38 +100,6 @@ fun SdsLogo(size: Int = 26, modifier: Modifier = Modifier) {
         contentAlignment = Alignment.Center
     ) {
         Icon(Icons.Default.Terminal, contentDescription = null, tint = TextSecondary, modifier = Modifier.size((size * 0.6f).dp))
-    }
-}
-
-@Composable
-fun PixelField(modifier: Modifier = Modifier, pixelScale: Float = 4f) {
-    var t by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(Unit) { while (true) { delay(60); t += 0.06f } }
-    val ramp = remember {
-        arrayOf(Color(0xFF030304), Color(0xFF0D0E12), Color(0xFF1C1E26), Color(0xFF3A3E4B), Color(0xFF737A8E), Color(0xFFBEC4D7))
-    }
-    Canvas(modifier) {
-        val pw = size.width / pixelScale; val ph = size.height / pixelScale
-        if (pw < 2f || ph < 2f) return@Canvas
-        val cols = pw.toInt(); val rows = ph.toInt()
-        for (y in 0 until rows) for (x in 0 until cols) {
-            val xf = x * 0.020f; val yf = y * 0.020f
-            val w1 = sin(xf * 0.85f + yf * 0.65f + t * 0.45f)
-            val w2 = cos(xf * 0.70f - yf * 0.90f - t * 0.35f)
-            val w3 = sin((xf + yf) * 0.60f + t * 0.55f)
-            var nw = 0f
-            val pts = arrayOf(0.15f to 0.25f, 0.85f to 0.30f, 0.30f to 0.75f)
-            pts.forEach { (px, py) ->
-                val d = sqrt((x - pw * px) * (x - pw * px) + (y - ph * py) * (y - ph * py))
-                nw += cos(d * 0.035f - t * 0.9f) * exp(-d * 0.007f)
-            }
-            var q = (w1 * 0.25f + w2 * 0.22f + w3 * 0.18f + nw * 0.35f + 1.6f) * 0.24f
-            if (q < 0f) q = 0f
-            q = Math.pow(q.toDouble(), 1.25).toFloat() * 1.1f
-            if (q > 1f) q = 1f
-            val idx = floor(q * (ramp.size - 1)).toInt().coerceIn(0, ramp.size - 1)
-            if (idx > 0) drawRect(ramp[idx], Offset(x * pixelScale, y * pixelScale), Size(pixelScale, pixelScale))
-        }
     }
 }
 
@@ -282,8 +241,7 @@ fun HomeScreen(onTerminal: () -> Unit, onFiles: () -> Unit, onPackages: () -> Un
         Triple("Security", Icons.Default.Menu, onSecurity)
     )
     Box(Modifier.fillMaxSize().background(Bg)) {
-        PixelField(Modifier.fillMaxSize())
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Bg.copy(alpha = 0.9f), Bg))))
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF0A0A0C), Bg))))
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
             SectionLabel("Profile")
             Row(verticalAlignment = Alignment.CenterVertically) {
