@@ -1,11 +1,15 @@
 package com.silverdev.sdsterminal
 
+import android.app.Activity
 import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
+import android.speech.RecognizerIntent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -518,17 +522,38 @@ fun OptimizationScreen() {
 data class ChatMessage(val isUser: Boolean, val text: String)
 
 @Composable
-fun AiScreen() {
+fun AiScreen(manager: SessionManager) {
     val context = LocalContext.current
     val prefs = context.getSharedPreferences("sds_prefs", Context.MODE_PRIVATE)
     val apiKey = prefs.getString("gemini_key", "") ?: ""
     
     var inputText by remember { mutableStateOf("") }
-    var messages by remember { mutableStateOf(listOf(ChatMessage(false, "Hello. I am the SDS Assistant. I can answer questions or open apps for you. Try: 'open discord'"))) }
+    var messages by remember { mutableStateOf(listOf(ChatMessage(false, "Hello. I am the SDS Agent. I can run commands, fix errors, and install software autonomously. Try: 'install rust and discord.py'"))) }
     var isTyping by remember { mutableStateOf(false) }
     
     val scope = rememberCoroutineScope()
     val client = remember { OkHttpClient() }
+
+    val speechLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val spokenText = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+            if (spokenText != null) {
+                inputText = spokenText
+            }
+        }
+    }
+
+    fun startVoiceInput() {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak your command...")
+        }
+        try {
+            speechLauncher.launch(intent)
+        } catch (e: Exception) {
+            messages = messages + ChatMessage(false, "Voice input is not supported on this device.")
+        }
+    }
 
     fun sendMessage() {
         if (inputText.isBlank()) return
@@ -561,15 +586,40 @@ fun AiScreen() {
 
         isTyping = true
         scope.launch {
-            val reply = callGemini(client, apiKey, userMsg)
-            messages = messages + ChatMessage(false, reply)
+            val session = manager.active() ?: manager.newSession()
+            session.write("clear\n".toByteArray())
+            delay(500)
+
+            var currentPrompt = userMsg
+            var maxIterations = 5
+            
+            while (maxIterations > 0) {
+                val reply = callGeminiAgent(client, apiKey, currentPrompt)
+                messages = messages + ChatMessage(false, reply.message)
+                
+                if (reply.command.isNullOrBlank()) {
+                    break
+                }
+
+                val cmd = reply.command.trim()
+                messages = messages + ChatMessage(true, "[Running]: $cmd")
+                
+                session.write("$cmd\n".toByteArray())
+                
+                delay(7000)
+                
+                val terminalOutput = session.getRecentOutput(15)
+                currentPrompt = "Terminal output after running '$cmd':\n$terminalOutput\n\nDid it succeed? If not, how to fix it? Provide the next command."
+                maxIterations--
+            }
+            
             isTyping = false
         }
     }
 
     Column(Modifier.fillMaxSize().padding(16.dp).padding(top = 32.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Text("AI Assistant", fontFamily = SansFamily, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = TextPrimary, modifier = Modifier.weight(1f))
+            Text("AI Agent", fontFamily = SansFamily, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = TextPrimary, modifier = Modifier.weight(1f))
         }
         
         if (apiKey.isEmpty()) {
@@ -596,12 +646,19 @@ fun AiScreen() {
             }
             if (isTyping) {
                 item {
-                    Text("Thinking...", fontFamily = MonoFamily, fontSize = 12.sp, color = TextTertiary, modifier = Modifier.padding(8.dp))
+                    Text("Agent is thinking/running commands...", fontFamily = MonoFamily, fontSize = 12.sp, color = TextTertiary, modifier = Modifier.padding(8.dp))
                 }
             }
         }
 
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(
+                onClick = { startVoiceInput() },
+                modifier = Modifier.background(Surface.copy(alpha = 0.85f)).border(1.dp, Border, CircleShape).size(48.dp)
+            ) {
+                Icon(Icons.Default.Mic, contentDescription = "Voice Input", tint = TextPrimary)
+            }
+            Spacer(Modifier.width(8.dp))
             BasicTextField(
                 value = inputText,
                 onValueChange = { inputText = it },
@@ -609,7 +666,7 @@ fun AiScreen() {
                 cursorBrush = SolidColor(TextPrimary),
                 modifier = Modifier.weight(1f).background(Surface.copy(alpha = 0.85f)).border(1.dp, Border, RoundedCornerShape(8.dp)).padding(12.dp),
                 decorationBox = { inner ->
-                    if (inputText.isEmpty()) Text("Ask anything or 'open youtube'...", fontFamily = MonoFamily, fontSize = 14.sp, color = TextTertiary)
+                    if (inputText.isEmpty()) Text("Ask agent or 'install rust'...", fontFamily = MonoFamily, fontSize = 14.sp, color = TextTertiary)
                     inner()
                 }
             )
@@ -624,14 +681,28 @@ fun AiScreen() {
     }
 }
 
-suspend fun callGemini(client: OkHttpClient, apiKey: String, prompt: String): String = withContext(Dispatchers.IO) {
-    if (apiKey.isEmpty()) return@withContext "Please set your Gemini API Key in Settings."
+data class AgentResponse(val message: String, val command: String?)
+
+suspend fun callGeminiAgent(client: OkHttpClient, apiKey: String, prompt: String): AgentResponse = withContext(Dispatchers.IO) {
+    if (apiKey.isEmpty()) return@withContext AgentResponse("Please set your Gemini API Key in Settings.", null)
     
     try {
+        val systemPrompt = """
+            You are an autonomous AI agent inside a Linux terminal.
+            Your goal is to execute terminal commands to fulfill the user's request.
+            If you need to run a command, respond EXACTLY in this JSON format:
+            {"message": "explanation of what you are doing", "command": "the_bash_command_here"}
+            
+            If the task is fully complete, respond with:
+            {"message": "Task completed successfully!", "command": null}
+            
+            Do not include markdown formatting like ```json. Just output raw JSON.
+        """.trimIndent()
+
         val json = JSONObject().apply {
             put("contents", org.json.JSONArray().put(JSONObject().apply {
                 put("parts", org.json.JSONArray().put(JSONObject().apply {
-                    put("text", "You are the AI assistant inside SDS Terminal, a Linux terminal app. Keep responses short and helpful. User says: $prompt")
+                    put("text", "$systemPrompt\n\nUser: $prompt")
                 }))
             }))
         }
@@ -643,10 +714,10 @@ suspend fun callGemini(client: OkHttpClient, apiKey: String, prompt: String): St
             .build()
 
         client.newCall(request).execute().use { response ->
-            val resBody = response.body?.string() ?: return@withContext "Error: Empty response"
+            val resBody = response.body?.string() ?: return@withContext AgentResponse("Error: Empty response", null)
             val jsonRes = JSONObject(resBody)
             if (jsonRes.has("error")) {
-                return@withContext "API Error: ${jsonRes.getJSONObject("error").getString("message")}"
+                return@withContext AgentResponse("API Error: ${jsonRes.getJSONObject("error").getString("message")}", null)
             }
             val text = jsonRes.getJSONArray("candidates")
                 .getJSONObject(0)
@@ -654,10 +725,17 @@ suspend fun callGemini(client: OkHttpClient, apiKey: String, prompt: String): St
                 .getJSONArray("parts")
                 .getJSONObject(0)
                 .getString("text")
-            return@withContext text
+            
+            val cleanText = text.replace("```json", "").replace("```", "").trim()
+            val parsed = JSONObject(cleanText)
+            
+            return@withContext AgentResponse(
+                message = parsed.optString("message", "Thinking..."),
+                command = if (parsed.isNull("command")) null else parsed.optString("command")
+            )
         }
     } catch (e: Exception) {
-        return@withContext "Network Error: ${e.message}"
+        return@withContext AgentResponse("Network or parsing error: ${e.message}", null)
     }
 }
 
@@ -759,7 +837,7 @@ fun RootNav(manager: SessionManager, rootDir: File, bgImageUri: String?, onPickI
                 )
             }
             composable("terminal") { TerminalScreen(manager) }
-            composable("ai") { AiScreen() }
+            composable("ai") { AiScreen(manager) }
             composable("optimize") { OptimizationScreen() }
             composable("files") { FileBrowserScreen(rootDir) }
             composable("security") { SecurityScreen(bgImageUri, onPickImage) }
