@@ -40,11 +40,12 @@ class TerminalSession(
         isRunning = true
         readJob = scope.launch {
             val bashFile = File(rootfsDir, "bin/bash")
-            val isRootfsReady = File(rootfsDir, ".installed_v5").exists() && bashFile.exists()
+            val isRootfsReady = File(rootfsDir, ".installed_v6").exists() && bashFile.exists()
             
             if (!isRootfsReady && !forceAndroidShell) {
                 feed("\r\n[*] Installing Linux environment (64-bit)...\r\n")
                 rootfsDir.deleteRecursively()
+                File(rootfsDir, ".installed_v5").delete()
                 File(rootfsDir, ".installed_v4").delete()
                 File(rootfsDir, ".installed_v3").delete()
                 File(rootfsDir, ".installed_v2").delete()
@@ -58,7 +59,7 @@ class TerminalSession(
                     
                     if (bashFile.exists()) {
                         feed("\r\n[*] Extraction verified. Starting bash...\r\n\r\n")
-                        File(rootfsDir, ".installed_v5").writeText("ok")
+                        File(rootfsDir, ".installed_v6").writeText("ok")
                     } else {
                         feed("\r\n[!] Extraction failed: /bin/bash missing.\r\n")
                         forceAndroidShell
@@ -69,7 +70,7 @@ class TerminalSession(
                 }
             }
 
-            val useShell = forceAndroidShell || !File(rootfsDir, ".installed_v5").exists()
+            val useShell = forceAndroidShell || !File(rootfsDir, ".installed_v6").exists()
             masterFd = if (useShell) launchAndroidShell() else launchProot()
 
             if (masterFd < 0) {
@@ -141,7 +142,6 @@ class TerminalSession(
         val tmpDir = File(context.filesDir, "tmp")
         tmpDir.mkdirs()
 
-        // Create a writable lib directory and copy talloc as libtalloc.so.2
         val libDir = File(context.filesDir, "libs")
         libDir.mkdirs()
         try {
@@ -151,8 +151,15 @@ class TerminalSession(
                 tallocSrc.copyTo(tallocDest, overwrite = true)
                 tallocDest.setExecutable(true)
             }
+            
+            val shmemSrc = File(nativeDir, "libandroid-shmem.so")
+            val shmemDest = File(libDir, "libandroid-shmem.so")
+            if (shmemSrc.exists() && !shmemDest.exists()) {
+                shmemSrc.copyTo(shmemDest, overwrite = true)
+                shmemDest.setExecutable(true)
+            }
         } catch (e: Exception) {
-            feed("\r\n[Warning] Failed to copy libtalloc.so.2: ${e.message}\r\n")
+            feed("\r\n[Warning] Failed to copy shared libraries: ${e.message}\r\n")
         }
 
         val hasSdCard = Environment.isExternalStorageManager()
