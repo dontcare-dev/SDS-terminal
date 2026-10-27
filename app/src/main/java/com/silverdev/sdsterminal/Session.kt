@@ -40,11 +40,12 @@ class TerminalSession(
         isRunning = true
         readJob = scope.launch {
             val bashFile = File(rootfsDir, "bin/bash")
-            val isRootfsReady = File(rootfsDir, ".installed_v6").exists() && bashFile.exists()
+            val isRootfsReady = File(rootfsDir, ".installed_v7").exists() && bashFile.exists()
             
             if (!isRootfsReady && !forceAndroidShell) {
                 feed("\r\n[*] Installing Linux environment (64-bit)...\r\n")
                 rootfsDir.deleteRecursively()
+                File(rootfsDir, ".installed_v6").delete()
                 File(rootfsDir, ".installed_v5").delete()
                 File(rootfsDir, ".installed_v4").delete()
                 File(rootfsDir, ".installed_v3").delete()
@@ -59,7 +60,7 @@ class TerminalSession(
                     
                     if (bashFile.exists()) {
                         feed("\r\n[*] Extraction verified. Starting bash...\r\n\r\n")
-                        File(rootfsDir, ".installed_v6").writeText("ok")
+                        File(rootfsDir, ".installed_v7").writeText("ok")
                     } else {
                         feed("\r\n[!] Extraction failed: /bin/bash missing.\r\n")
                         forceAndroidShell
@@ -70,7 +71,7 @@ class TerminalSession(
                 }
             }
 
-            val useShell = forceAndroidShell || !File(rootfsDir, ".installed_v6").exists()
+            val useShell = forceAndroidShell || !File(rootfsDir, ".installed_v7").exists()
             masterFd = if (useShell) launchAndroidShell() else launchProot()
 
             if (masterFd < 0) {
@@ -137,8 +138,14 @@ class TerminalSession(
 
     private fun launchProot(): Int {
         val nativeDir = context.applicationInfo.nativeLibraryDir
-        homeDir.mkdirs()
         
+        // Check if proot binaries actually downloaded properly (not 0 bytes)
+        if (File("$nativeDir/libproot.so").length() == 0L) {
+            feed("\r\n[!] proot binary is missing from build.\r\n")
+            return -1
+        }
+        
+        homeDir.mkdirs()
         val tmpDir = File(context.filesDir, "tmp")
         tmpDir.mkdirs()
 
