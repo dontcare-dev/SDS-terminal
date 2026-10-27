@@ -650,10 +650,10 @@ fun AiScreen(manager: SessionManager) {
                 
                 session.write("$cmd\n".toByteArray())
                 
-                delay(7000)
+                delay(15000)
                 
-                val terminalOutput = session.getRecentOutput(15)
-                currentPrompt = "Terminal output after running '$cmd':\n$terminalOutput\n\nDid it succeed? If not, how to fix it? Provide the next command."
+                val terminalOutput = session.getRecentOutput()
+                currentPrompt = "Terminal output after running '$cmd':\n---\n$terminalOutput\n---\n\nDid it succeed? If not, how to fix it? Provide the next command."
                 maxIterations--
             }
             
