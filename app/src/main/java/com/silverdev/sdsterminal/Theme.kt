@@ -115,7 +115,7 @@ fun TerminalScreen(manager: SessionManager) {
             manager.newSession(); sessions = manager.getSessions(); activeIndex = sessions.size - 1
         }
     }
-    Column(Modifier.fillMaxSize().imePadding()) {
+    Column(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.8f)).imePadding()) {
         if (sessions.isNotEmpty()) {
             ScrollableTabRow(
                 selectedTabIndex = activeIndex, containerColor = TerminalExtraRow,
@@ -145,7 +145,7 @@ fun TerminalScreen(manager: SessionManager) {
                     onInput = { active.write(it) },
                     onResize = { r, c -> active.resize(r, c) },
                     onKeyEvent = { ev -> handleKey(ev, active) },
-                    fontSize = 14.sp
+                    fontSize = 15.sp
                 )
             } else {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -154,10 +154,10 @@ fun TerminalScreen(manager: SessionManager) {
             }
         }
         
-        Row(Modifier.fillMaxWidth().background(TerminalExtraRow).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().background(TerminalExtraRow).padding(horizontal = 4.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = {
                 manager.newSession(); refresh(); activeIndex = manager.getSessions().size - 1
-            }) { Icon(Icons.Default.Add, contentDescription = "New tab", tint = TextSecondary) }
+            }, modifier = Modifier.size(36.dp)) { Icon(Icons.Default.Add, contentDescription = "New tab", tint = TextSecondary, modifier = Modifier.size(20.dp)) }
             
             Spacer(Modifier.weight(1f))
             
@@ -166,12 +166,12 @@ fun TerminalScreen(manager: SessionManager) {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     val text = active.buffer.getAllText()
                     clipboard.setPrimaryClip(ClipData.newPlainText("Terminal Output", text))
-                    Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
                 }
-            }) {
-                Icon(Icons.Default.ContentCopy, contentDescription = "Copy All", tint = TextPrimary, modifier = Modifier.size(20.dp))
+            }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
+                Icon(Icons.Default.ContentCopy, contentDescription = "Copy All", tint = TextPrimary, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(4.dp))
-                Text("Copy All", color = TextPrimary, fontSize = 12.sp)
+                Text("Copy", color = TextPrimary, fontSize = 12.sp)
             }
             
             TextButton(onClick = {
@@ -183,8 +183,8 @@ fun TerminalScreen(manager: SessionManager) {
                         active.write(text.toByteArray())
                     }
                 }
-            }) {
-                Icon(Icons.Default.ContentPaste, contentDescription = "Paste", tint = TextPrimary, modifier = Modifier.size(20.dp))
+            }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
+                Icon(Icons.Default.ContentPaste, contentDescription = "Paste", tint = TextPrimary, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(4.dp))
                 Text("Paste", color = TextPrimary, fontSize = 12.sp)
             }
