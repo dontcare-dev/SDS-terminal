@@ -22,13 +22,19 @@ jobs:
       - name: Install NDK and CMake
         run: sdkmanager "ndk;26.1.10909125" "cmake;3.22.1"
 
-      - name: Download Correct 64-bit Proot Binaries
+      - name: Download Latest Proot Binaries Dynamically
         run: |
           mkdir -p app/src/main/jniLibs/arm64-v8a
           cd app/src/main/jniLibs/arm64-v8a
           
-          curl -fSL -o proot.deb "https://packages.termux.dev/apt/termux-main/pool/main/p/proot/proot_5.1.107.98_aarch64.deb"
-          curl -fSL -o talloc.deb "https://packages.termux.dev/apt/termux-main/pool/main/libt/libtalloc/libtalloc_2.5.0_aarch64.deb"
+          # Scrape Termux repo to find the latest filenames
+          PROOT_DEB=$(curl -s https://packages.termux.dev/apt/termux-main/pool/main/p/proot/ | grep -o 'proot_[^"]*_aarch64.deb' | head -n 1)
+          TALLOC_DEB=$(curl -s https://packages.termux.dev/apt/termux-main/pool/main/libt/libtalloc/ | grep -o 'libtalloc_[^"]*_aarch64.deb' | head -n 1)
+          
+          echo "Downloading $PROOT_DEB and $TALLOC_DEB..."
+          
+          curl -fSL -o proot.deb "https://packages.termux.dev/apt/termux-main/pool/main/p/proot/$PROOT_DEB"
+          curl -fSL -o talloc.deb "https://packages.termux.dev/apt/termux-main/pool/main/libt/libtalloc/$TALLOC_DEB"
           
           ar x proot.deb
           ar x talloc.deb
@@ -40,7 +46,8 @@ jobs:
           if [ -f data/data/com.termux/files/usr/libexec/proot/libproot-loader.so ]; then
             cp data/data/com.termux/files/usr/libexec/proot/libproot-loader.so libproot-loader.so
           else
-            cp data/data/com.termux/files/usr/lib/libproot-loader.so libproot-loader.so 2>/dev/null || touch libproot-loader.so
+            echo "Loader not found in libexec, trying lib..."
+            cp data/data/com.termux/files/usr/lib/libproot-loader.so libproot-loader.so
           fi
           
           rm -rf data *.tar.xz *.deb
