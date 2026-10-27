@@ -155,6 +155,13 @@ class TerminalSession(
         val libDir = File(context.filesDir, "libs")
         libDir.mkdirs()
         try {
+            val loaderSrc = File(nativeDir, "libproot-loader.so")
+            val loaderDest = File(libDir, "libproot-loader.so")
+            if (loaderSrc.exists() && !loaderDest.exists()) {
+                loaderSrc.copyTo(loaderDest, overwrite = true)
+                loaderDest.setExecutable(true)
+            }
+            
             val tallocSrc = File(nativeDir, "libtalloc.so")
             val tallocDest = File(libDir, "libtalloc.so.2")
             if (tallocSrc.exists() && !tallocDest.exists()) {
@@ -181,13 +188,12 @@ class TerminalSession(
             "-r", rootfsDir.absolutePath,
             "-b", "/dev", "-b", "/proc", "-b", "/sys",
             "-b", "${homeDir.absolutePath}:/root", "-w", "/root", "--link2symlink",
-            "-b", "${context.applicationInfo.nativeLibraryDir}:/data/data/com.termux/files/usr/libexec",
             "/bin/bash", "--login"
         )
         args.addAll(bindSdCard)
 
         val env = arrayOf(
-            "PROOT_LOADER=$nativeDir/libproot-loader.so",
+            "PROOT_LOADER=${libDir.absolutePath}/libproot-loader.so",
             "PROOT_TMP_DIR=${tmpDir.absolutePath}",
             "LD_LIBRARY_PATH=${libDir.absolutePath}:$nativeDir",
             "HOME=/root",
