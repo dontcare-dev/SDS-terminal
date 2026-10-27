@@ -14,6 +14,8 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.nio.file.Files
+import java.nio.file.Paths
 import java.util.UUID
 import java.util.zip.GZIPInputStream
 
@@ -38,11 +40,12 @@ class TerminalSession(
         isRunning = true
         readJob = scope.launch {
             val bashFile = File(rootfsDir, "bin/bash")
-            val isRootfsReady = File(rootfsDir, ".installed_v3").exists() && bashFile.exists()
+            val isRootfsReady = File(rootfsDir, ".installed_v4").exists() && bashFile.exists()
             
             if (!isRootfsReady && !forceAndroidShell) {
-                feed("\r\n[*] Installing Linux environment (Clean)...\r\n")
+                feed("\r\n[*] Installing Linux environment...\r\n")
                 rootfsDir.deleteRecursively()
+                File(rootfsDir, ".installed_v3").delete()
                 File(rootfsDir, ".installed_v2").delete()
                 File(rootfsDir, ".installed").delete()
                 
@@ -54,7 +57,7 @@ class TerminalSession(
                     
                     if (bashFile.exists()) {
                         feed("\r\n[*] Extraction verified. Starting bash...\r\n\r\n")
-                        File(rootfsDir, ".installed_v3").writeText("ok")
+                        File(rootfsDir, ".installed_v4").writeText("ok")
                     } else {
                         feed("\r\n[!] Extraction failed: /bin/bash missing.\r\n")
                         forceAndroidShell
@@ -65,7 +68,7 @@ class TerminalSession(
                 }
             }
 
-            val useShell = forceAndroidShell || !File(rootfsDir, ".installed_v3").exists()
+            val useShell = forceAndroidShell || !File(rootfsDir, ".installed_v4").exists()
             masterFd = if (useShell) launchAndroidShell() else launchProot()
 
             if (masterFd < 0) {
@@ -108,10 +111,16 @@ class TerminalSession(
                     val out = File(rootfsDir, e.name)
                     if (e.isDirectory) {
                         out.mkdirs()
+                    } else if (e.isSymbolicLink) {
+                        out.parentFile?.mkdirs()
+                        try {
+                            Files.createSymbolicLink(out.toPath(), Paths.get(e.linkName))
+                        } catch (ex: Exception) {
+                            FileOutputStream(out).use { fos -> tar.copyTo(fos) }
+                        }
                     } else {
                         out.parentFile?.mkdirs()
                         FileOutputStream(out).use { fos -> tar.copyTo(fos) }
-                        
                         val mode = e.mode
                         if ((mode and 0b001_000_000) != 0) out.setExecutable(true, false)
                         if ((mode and 0b000_100_000) != 0) out.setReadable(true, false)
