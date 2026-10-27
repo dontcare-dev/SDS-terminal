@@ -36,7 +36,6 @@ jobs:
           curl -fSL -o talloc.deb "https://packages.termux.dev/apt/termux-main/pool/main/libt/libtalloc/$TALLOC_DEB"
           curl -fSL -o shmem.deb "https://packages.termux.dev/apt/termux-main/pool/main/liba/libandroid-shmem/$SHMEM_DEB"
 
-          # Extract Proot
           mkdir -p proot_extract && cd proot_extract
           ar x ../proot.deb
           tar -xf data.tar.* --no-same-owner
@@ -44,7 +43,6 @@ jobs:
           cp data/data/com.termux/files/usr/libexec/proot/loader ../libproot-loader.so
           cd ..
 
-          # Extract Talloc
           mkdir -p talloc_extract && cd talloc_extract
           ar x ../talloc.deb
           tar -xf data.tar.* --no-same-owner
@@ -52,7 +50,6 @@ jobs:
           cp "$TALLOC_LIB" ../libtalloc.so
           cd ..
 
-          # Extract Shmem
           mkdir -p shmem_extract && cd shmem_extract
           ar x ../shmem.deb
           tar -xf data.tar.* --no-same-owner
@@ -60,7 +57,6 @@ jobs:
           cp "$SHMEM_LIB" ../libandroid-shmem.so
           cd ..
 
-          # Verify loader is not empty
           if [ ! -s libproot-loader.so ]; then
             echo "ERROR: libproot-loader.so is empty or missing."
             exit 1
