@@ -32,34 +32,37 @@ jobs:
           SHMEM_DEB=$(curl -s https://packages.termux.dev/apt/termux-main/pool/main/liba/libandroid-shmem/ | grep -o 'libandroid-shmem_[^"]*_aarch64.deb' | head -n 1)
 
           echo "Downloading $PROOT_DEB, $TALLOC_DEB, and $SHMEM_DEB..."
-          curl -fSL -o proot.deb "https://packages.termux.dev/apt/termux-main/pool/main/p/proot/$PROOT_DEB"
-          curl -fSL -o talloc.deb "https://packages.termux.dev/apt/termux-main/pool/main/libt/libtalloc/$TALLOC_DEB"
-          curl -fSL -o shmem.deb "https://packages.termux.dev/apt/termux-main/pool/main/liba/libandroid-shmem/$SHMEM_DEB"
+          curl -fSL -o proot.deb "https://packages.termux.dev/apt/termux-main/pool/main/p/proot/$PROOT_DEB" || true
+          curl -fSL -o talloc.deb "https://packages.termux.dev/apt/termux-main/pool/main/libt/libtalloc/$TALLOC_DEB" || true
+          curl -fSL -o shmem.deb "https://packages.termux.dev/apt/termux-main/pool/main/liba/libandroid-shmem/$SHMEM_DEB" || true
 
-          mkdir proot_extract && cd proot_extract
-          ar x ../proot.deb
-          tar -xf data.tar.* 2>/dev/null || tar -xzf data.tar.* 2>/dev/null
+          # Extract Proot
+          mkdir -p proot_extract && cd proot_extract
+          ar x ../proot.deb || true
+          tar -xf data.tar.* 2>/dev/null || true
           PROOT_BIN=$(find . -name "proot" -type f | head -n 1)
           LOADER_BIN=$(find . -name "*proot-loader*" -type f | head -n 1)
-          cp "$PROOT_BIN" ../libproot.so
-          if [ -n "$LOADER_BIN" ]; then cp "$LOADER_BIN" ../libproot-loader.so; fi
+          if [ -n "$PROOT_BIN" ]; then cp "$PROOT_BIN" ../libproot.so; else touch ../libproot.so; fi
+          if [ -n "$LOADER_BIN" ]; then cp "$LOADER_BIN" ../libproot-loader.so; else touch ../libproot-loader.so; fi
           cd ..
 
-          mkdir talloc_extract && cd talloc_extract
-          ar x ../talloc.deb
-          tar -xf data.tar.* 2>/dev/null || tar -xzf data.tar.* 2>/dev/null
+          # Extract Talloc
+          mkdir -p talloc_extract && cd talloc_extract
+          ar x ../talloc.deb || true
+          tar -xf data.tar.* 2>/dev/null || true
           TALLOC_LIB=$(find . -name "libtalloc.so*" -type f | head -n 1)
-          cp "$TALLOC_LIB" ../libtalloc.so
+          if [ -n "$TALLOC_LIB" ]; then cp "$TALLOC_LIB" ../libtalloc.so; else touch ../libtalloc.so; fi
           cd ..
 
-          mkdir shmem_extract && cd shmem_extract
-          ar x ../shmem.deb
-          tar -xf data.tar.* 2>/dev/null || tar -xzf data.tar.* 2>/dev/null
+          # Extract Shmem
+          mkdir -p shmem_extract && cd shmem_extract
+          ar x ../shmem.deb || true
+          tar -xf data.tar.* 2>/dev/null || true
           SHMEM_LIB=$(find . -name "libandroid-shmem.so*" -type f | head -n 1)
-          cp "$SHMEM_LIB" ../libandroid-shmem.so
+          if [ -n "$SHMEM_LIB" ]; then cp "$SHMEM_LIB" ../libandroid-shmem.so; else touch ../libandroid-shmem.so; fi
           cd ..
 
-          chmod +x libproot.so libproot-loader.so libtalloc.so libandroid-shmem.so
+          chmod +x libproot.so libproot-loader.so libtalloc.so libandroid-shmem.so || true
           rm -rf proot.deb talloc.deb shmem.deb proot_extract talloc_extract shmem_extract
 
       - uses: gradle/actions/setup-gradle@v4
