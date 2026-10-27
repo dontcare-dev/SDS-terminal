@@ -1,6 +1,7 @@
 package com.silverdev.sdsterminal
 
 import android.Manifest
+import android.app.ActivityManager
 import android.app.Application
 import android.app.Notification
 import android.app.NotificationChannel
@@ -25,6 +26,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import java.io.File
 
 class SdsApp : Application() {
@@ -55,6 +64,56 @@ class TerminalService : Service() {
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .build()
     }
+}
+
+class GameBoosterService : Service() {
+    private var job: Job? = null
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val targetPkg = intent?.getStringExtra("target_pkg") ?: ""
+        val ignoredPkgs = intent?.getStringArrayListExtra("ignored_pkgs") ?: arrayListOf()
+
+        val mgr = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            mgr.createNotificationChannel(NotificationChannel("sds_booster", "Game Booster", NotificationManager.IMPORTANCE_LOW))
+        }
+
+        val notification = NotificationCompat.Builder(this, "sds_booster")
+            .setContentTitle("Game Booster Active")
+            .setContentText("Optimizing RAM in real-time...")
+            .setSmallIcon(android.R.drawable.ic_menu_manage)
+            .setOngoing(true)
+            .build()
+        
+        startForeground(42, notification)
+
+        job = scope.launch {
+            val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            val pm = packageManager
+            while (isActive) {
+                val mi = ActivityManager.MemoryInfo()
+                am.getMemoryInfo(mi)
+                if (mi.availMem < (mi.totalMem * 0.20)) {
+                    val apps = pm.getInstalledApplications(0)
+                    for (app in apps) {
+                        if (app.packageName != targetPkg && app.packageName != packageName && !ignoredPkgs.contains(app.packageName)) {
+                            am.killBackgroundProcesses(app.packageName)
+                        }
+                    }
+                }
+                delay(10000)
+            }
+        }
+        return START_NOT_STICKY
+    }
+
+    override fun onDestroy() {
+        job?.cancel()
+        super.onDestroy()
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
 }
 
 class MainActivity : ComponentActivity() {
