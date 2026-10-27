@@ -197,6 +197,10 @@ class TerminalSession(
             feed("\r\n[Warning] Failed to copy shared libraries: ${e.message}\r\n")
         }
 
+        val resolvConf = File(rootfsDir, "etc/resolv.conf")
+        resolvConf.parentFile?.mkdirs()
+        resolvConf.writeText("nameserver 8.8.8.8\nnameserver 1.1.1.1\n")
+
         val hasSdCard = Environment.isExternalStorageManager()
         val bindSdCard = if (hasSdCard) arrayOf("-b", "/storage/emulated/0:/sdcard") else arrayOf()
 
