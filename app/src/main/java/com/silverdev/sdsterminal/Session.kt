@@ -90,16 +90,22 @@ class TerminalSession(
         }
     }
 
-    fun getRecentOutput(lines: Int): String {
+    fun getRecentOutput(): String {
         val sb = StringBuilder()
-        val startRow = (buffer.rows - lines).coerceAtLeast(0)
-        for (r in startRow until buffer.rows) {
+        for (r in 0 until buffer.rows) {
+            var isEmpty = true
+            val rowStr = StringBuilder()
             for (c in 0 until buffer.cols) {
-                sb.append(buffer.grid[r][c].char)
+                val ch = buffer.grid[r][c].char
+                rowStr.append(ch)
+                if (ch != ' ') isEmpty = false
             }
-            sb.append("\n")
+            if (!isEmpty) {
+                sb.append(rowStr.toString().trimEnd()).append("\n")
+            }
         }
-        return sb.toString().trim()
+        val result = sb.toString().trim()
+        return if (result.isEmpty()) "[No output]" else result
     }
 
     private fun downloadAndExtract(onProgress: (Float) -> Unit) {
