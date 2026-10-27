@@ -2,12 +2,15 @@ package com.silverdev.sdsterminal
 
 import android.app.Activity
 import android.app.ActivityManager
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.speech.RecognizerIntent
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -54,6 +57,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 val Bg = Color(0xFF050505)
 val Surface = Color(0xFF0F0F11)
@@ -99,6 +103,7 @@ fun SdsTheme(bgImageUri: String? = null, content: @Composable () -> Unit) {
 
 @Composable
 fun TerminalScreen(manager: SessionManager) {
+    val context = LocalContext.current
     var sessions by remember { mutableStateOf(manager.getSessions()) }
     var activeIndex by remember { mutableStateOf(sessions.size - 1) }
     fun refresh() {
@@ -148,11 +153,43 @@ fun TerminalScreen(manager: SessionManager) {
                 }
             }
         }
+        
         Row(Modifier.fillMaxWidth().background(TerminalExtraRow).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = {
                 manager.newSession(); refresh(); activeIndex = manager.getSessions().size - 1
             }) { Icon(Icons.Default.Add, contentDescription = "New tab", tint = TextSecondary) }
+            
+            Spacer(Modifier.weight(1f))
+            
+            TextButton(onClick = {
+                if (active != null) {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    val text = active.buffer.getAllText()
+                    clipboard.setPrimaryClip(ClipData.newPlainText("Terminal Output", text))
+                    Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+                }
+            }) {
+                Icon(Icons.Default.ContentCopy, contentDescription = "Copy All", tint = TextPrimary, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Copy All", color = TextPrimary, fontSize = 12.sp)
+            }
+            
+            TextButton(onClick = {
+                if (active != null) {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    val clip = clipboard.primaryClip
+                    if (clip != null && clip.itemCount > 0) {
+                        val text = clip.getItemAt(0).text.toString()
+                        active.write(text.toByteArray())
+                    }
+                }
+            }) {
+                Icon(Icons.Default.ContentPaste, contentDescription = "Paste", tint = TextPrimary, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Paste", color = TextPrimary, fontSize = 12.sp)
+            }
         }
+        
         ExtraKeysRow(onSend = { active?.write(it.toByteArray()) }, modifier = Modifier.fillMaxWidth())
     }
 }
@@ -532,7 +569,14 @@ fun AiScreen(manager: SessionManager) {
     var isTyping by remember { mutableStateOf(false) }
     
     val scope = rememberCoroutineScope()
-    val client = remember { OkHttpClient() }
+    
+    val client = remember { 
+        OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .build() 
+    }
 
     val speechLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
@@ -686,57 +730,73 @@ data class AgentResponse(val message: String, val command: String?)
 suspend fun callGeminiAgent(client: OkHttpClient, apiKey: String, prompt: String): AgentResponse = withContext(Dispatchers.IO) {
     if (apiKey.isEmpty()) return@withContext AgentResponse("Please set your Gemini API Key in Settings.", null)
     
-    try {
-        val systemPrompt = """
-            You are an autonomous AI agent inside a Linux terminal.
-            Your goal is to execute terminal commands to fulfill the user's request.
-            If you need to run a command, respond EXACTLY in this JSON format:
-            {"message": "explanation of what you are doing", "command": "the_bash_command_here"}
-            
-            If the task is fully complete, respond with:
-            {"message": "Task completed successfully!", "command": null}
-            
-            Do not include markdown formatting like ```json. Just output raw JSON.
-        """.trimIndent()
+    val systemPrompt = """
+        You are an autonomous AI agent inside a Linux terminal.
+        Your goal is to execute terminal commands to fulfill the user's request.
+        If you need to run a command, respond EXACTLY in this JSON format:
+        {"message": "explanation of what you are doing", "command": "the_bash_command_here"}
+        
+        If the task is fully complete, respond with:
+        {"message": "Task completed successfully!", "command": null}
+        
+        Do not include markdown formatting like ```json. Just output raw JSON.
+    """.trimIndent()
 
-        val json = JSONObject().apply {
-            put("contents", org.json.JSONArray().put(JSONObject().apply {
-                put("parts", org.json.JSONArray().put(JSONObject().apply {
-                    put("text", "$systemPrompt\n\nUser: $prompt")
-                }))
+    val json = JSONObject().apply {
+        put("contents", org.json.JSONArray().put(JSONObject().apply {
+            put("parts", org.json.JSONArray().put(JSONObject().apply {
+                put("text", "$systemPrompt\n\nUser: $prompt")
             }))
-        }
-
-        val body = json.toString().toRequestBody("application/json".toMediaType())
-        val request = Request.Builder()
-            .url("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=$apiKey")
-            .post(body)
-            .build()
-
-        client.newCall(request).execute().use { response ->
-            val resBody = response.body?.string() ?: return@withContext AgentResponse("Error: Empty response", null)
-            val jsonRes = JSONObject(resBody)
-            if (jsonRes.has("error")) {
-                return@withContext AgentResponse("API Error: ${jsonRes.getJSONObject("error").getString("message")}", null)
-            }
-            val text = jsonRes.getJSONArray("candidates")
-                .getJSONObject(0)
-                .getJSONObject("content")
-                .getJSONArray("parts")
-                .getJSONObject(0)
-                .getString("text")
-            
-            val cleanText = text.replace("```json", "").replace("```", "").trim()
-            val parsed = JSONObject(cleanText)
-            
-            return@withContext AgentResponse(
-                message = parsed.optString("message", "Thinking..."),
-                command = if (parsed.isNull("command")) null else parsed.optString("command")
-            )
-        }
-    } catch (e: Exception) {
-        return@withContext AgentResponse("Network or parsing error: ${e.message}", null)
+        }))
     }
+
+    val body = json.toString().toRequestBody("application/json".toMediaType())
+    val request = Request.Builder()
+        .url("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=$apiKey")
+        .post(body)
+        .build()
+
+    var lastError = "Unknown error"
+    
+    for (attempt in 1..3) {
+        try {
+            client.newCall(request).execute().use { response ->
+                val resBody = response.body?.string() ?: return@withContext AgentResponse("Error: Empty response", null)
+                
+                if (response.code == 503 || response.code == 429) {
+                    lastError = "API is busy (${response.code}). Retrying..."
+                    delay(2000L * attempt)
+                } else if (!response.isSuccessful) {
+                    val jsonRes = JSONObject(resBody)
+                    if (jsonRes.has("error")) {
+                        return@withContext AgentResponse("API Error: ${jsonRes.getJSONObject("error").getString("message")}", null)
+                    }
+                    return@withContext AgentResponse("HTTP Error: ${response.code}", null)
+                } else {
+                    val jsonRes = JSONObject(resBody)
+                    val text = jsonRes.getJSONArray("candidates")
+                        .getJSONObject(0)
+                        .getJSONObject("content")
+                        .getJSONArray("parts")
+                        .getJSONObject(0)
+                        .getString("text")
+                    
+                    val cleanText = text.replace("```json", "").replace("```", "").trim()
+                    val parsed = JSONObject(cleanText)
+                    
+                    return@withContext AgentResponse(
+                        message = parsed.optString("message", "Thinking..."),
+                        command = if (parsed.isNull("command")) null else parsed.optString("command")
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            lastError = e.message ?: "Network error"
+            if (attempt < 3) delay(2000L * attempt)
+        }
+    }
+    
+    return@withContext AgentResponse("Network or parsing error: $lastError", null)
 }
 
 @Composable
