@@ -105,10 +105,10 @@ fun TerminalScreen(manager: SessionManager) {
             manager.newSession(); sessions = manager.getSessions(); activeIndex = sessions.size - 1
         }
     }
-    Column(Modifier.fillMaxSize().background(TerminalBlack).imePadding()) {
+    Column(Modifier.fillMaxSize().imePadding()) {
         if (sessions.isNotEmpty()) {
             ScrollableTabRow(
-                selectedTabIndex = activeIndex, containerColor = TerminalExtraRow,
+                selectedTabIndex = activeIndex, containerColor = TerminalExtraRow.copy(alpha = 0.7f),
                 contentColor = TextPrimary, edgePadding = 0.dp, modifier = Modifier.fillMaxWidth(),
                 divider = { HorizontalDivider(color = Border, thickness = 1.dp) }
             ) {
@@ -143,7 +143,7 @@ fun TerminalScreen(manager: SessionManager) {
                 }
             }
         }
-        Row(Modifier.fillMaxWidth().background(TerminalExtraRow).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().background(TerminalExtraRow.copy(alpha = 0.7f)).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = {
                 manager.newSession(); refresh(); activeIndex = manager.getSessions().size - 1
             }) { Icon(Icons.Default.Add, contentDescription = "New tab", tint = TextSecondary) }
