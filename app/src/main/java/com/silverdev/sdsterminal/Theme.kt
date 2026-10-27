@@ -2,6 +2,7 @@ package com.silverdev.sdsterminal
 
 import android.app.ActivityManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import androidx.compose.foundation.BorderStroke
@@ -33,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.navigation.compose.*
 import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
@@ -293,6 +295,7 @@ fun OptimizationScreen() {
     var ignoredApps by remember { mutableStateOf(setOf<String>()) }
     var showIgnoreList by remember { mutableStateOf(false) }
     var toastMsg by remember { mutableStateOf("") }
+    var realTimeBoost by remember { mutableStateOf(true) }
     
     var totalRam by remember { mutableStateOf(0L) }
     var usedRam by remember { mutableStateOf(0L) }
@@ -314,7 +317,7 @@ fun OptimizationScreen() {
         }
     }
 
-    Column(Modifier.fillMaxSize().padding(20.dp)) {
+    Column(Modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState())) {
         Text("Game Booster", fontFamily = SansFamily, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
         
         Card(
@@ -382,6 +385,24 @@ fun OptimizationScreen() {
 
         Spacer(Modifier.height(16.dp))
 
+        Row(
+            Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Text("Real-Time Auto-Boost", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text("Clears RAM every 10s while playing", color = TextSecondary, fontSize = 13.sp)
+            }
+            Switch(
+                checked = realTimeBoost,
+                onCheckedChange = { realTimeBoost = it },
+                colors = SwitchDefaults.colors(checkedThumbColor = Green)
+            )
+        }
+
+        Spacer(Modifier.height(8.dp))
+
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(
                 onClick = { showIgnoreList = !showIgnoreList },
@@ -406,6 +427,15 @@ fun OptimizationScreen() {
                                 killed++
                             }
                         }
+                        
+                        if (realTimeBoost) {
+                            val intent = Intent(context, GameBoosterService::class.java).apply {
+                                putExtra("target_pkg", targetPkg)
+                                putStringArrayListExtra("ignored_pkgs", ArrayList(ignoredApps))
+                            }
+                            ContextCompat.startForegroundService(context, intent)
+                        }
+
                         toastMsg = "Boosted! Cleared $killed apps. Launching ${selectedGame!!.loadLabel(pm)}..."
                         val intent = pm.getLaunchIntentForPackage(targetPkg)
                         if (intent != null) context.startActivity(intent)
