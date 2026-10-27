@@ -241,7 +241,15 @@ fun TerminalRenderer(
     val ch = m.size.height.toFloat().coerceAtLeast(1f)
     var textValue by remember { mutableStateOf("") }
     var cursorOn by remember { mutableStateOf(true) }
-    LaunchedEffect(Unit) { while (true) { delay(500); cursorOn = !cursorOn } }
+    var frameTick by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(Unit) { 
+        while (true) { 
+            delay(33) 
+            frameTick++
+            cursorOn = !cursorOn 
+        } 
+    }
 
     Box(
         modifier = modifier.fillMaxSize()
@@ -254,6 +262,7 @@ fun TerminalRenderer(
             .pointerInput(Unit) { detectTapGestures { fr.requestFocus(); kb?.show() } }
     ) {
         Canvas(Modifier.fillMaxSize()) {
+            frameTick
             buffer.revision
             for (r in 0 until buffer.rows) for (c in 0 until buffer.cols) {
                 val cell = buffer.grid[r][c]
