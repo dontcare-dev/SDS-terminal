@@ -199,10 +199,13 @@ class TerminalSession(
             "-0",
             "-r", rootfsDir.absolutePath,
             "-b", "/dev", "-b", "/proc", "-b", "/sys",
-            "-b", "${homeDir.absolutePath}:/root", "-w", "/root", "--link2symlink",
-            "/bin/bash", "--login"
+            "-b", "${homeDir.absolutePath}:/root", "-w", "/root", "--link2symlink"
         )
+        
         args.addAll(bindSdCard)
+        
+        args.add("/bin/bash")
+        args.add("--login")
 
         val env = arrayOf(
             "PROOT_LOADER=$nativeDir/libproot-loader.so",
