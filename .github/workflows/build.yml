@@ -27,8 +27,8 @@ jobs:
           mkdir -p app/src/main/jniLibs/arm64-v8a
           cd app/src/main/jniLibs/arm64-v8a
           
-          curl -fSL -o proot.deb "https://packages.termux.dev/apt/termux-main/pool/main/p/proot/proot_5.1.107.92_aarch64.deb"
-          curl -fSL -o talloc.deb "https://packages.termux.dev/apt/termux-main/pool/main/libt/libtalloc/libtalloc_2.4.3_aarch64.deb"
+          curl -fSL -o proot.deb "https://packages.termux.dev/apt/termux-main/pool/main/p/proot/proot_5.1.107.98_aarch64.deb"
+          curl -fSL -o talloc.deb "https://packages.termux.dev/apt/termux-main/pool/main/libt/libtalloc/libtalloc_2.5.0_aarch64.deb"
           
           ar x proot.deb
           ar x talloc.deb
