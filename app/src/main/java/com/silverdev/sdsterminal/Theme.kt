@@ -1,12 +1,9 @@
 package com.silverdev.sdsterminal
 
 import android.app.ActivityManager
-import android.app.NotificationManager
 import android.content.Context
-import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
-import android.os.Build
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -470,9 +467,8 @@ data class ChatMessage(val isUser: Boolean, val text: String)
 fun AiScreen() {
     val context = LocalContext.current
     val prefs = context.getSharedPreferences("sds_prefs", Context.MODE_PRIVATE)
+    val apiKey = prefs.getString("gemini_key", "") ?: ""
     
-    var apiKey by remember { mutableStateOf(prefs.getString("gemini_key", "") ?: "") }
-    var showSettings by remember { mutableStateOf(apiKey.isEmpty()) }
     var inputText by remember { mutableStateOf("") }
     var messages by remember { mutableStateOf(listOf(ChatMessage(false, "Hello. I am the SDS Assistant. I can answer questions or open apps for you. Try: 'open discord'"))) }
     var isTyping by remember { mutableStateOf(false) }
@@ -520,29 +516,10 @@ fun AiScreen() {
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Text("AI Assistant", fontFamily = SansFamily, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = TextPrimary, modifier = Modifier.weight(1f))
-            IconButton(onClick = { showSettings = !showSettings }) {
-                Icon(Icons.Default.Settings, contentDescription = "Settings", tint = TextSecondary)
-            }
         }
         
-        if (showSettings) {
-            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                BasicTextField(
-                    value = apiKey,
-                    onValueChange = { 
-                        apiKey = it 
-                        prefs.edit().putString("gemini_key", it).apply()
-                    },
-                    textStyle = androidx.compose.ui.text.TextStyle(fontFamily = MonoFamily, fontSize = 14.sp, color = TextPrimary),
-                    cursorBrush = SolidColor(TextPrimary),
-                    modifier = Modifier.weight(1f).background(Surface).border(1.dp, Border).padding(12.dp),
-                    decorationBox = { inner ->
-                        if (apiKey.isEmpty()) Text("Enter Gemini API Key", fontFamily = MonoFamily, fontSize = 14.sp, color = TextTertiary)
-                        inner()
-                    }
-                )
-            }
-            Spacer(Modifier.height(8.dp))
+        if (apiKey.isEmpty()) {
+            Text("Please set your Gemini API Key in Settings to use the AI.", color = Red, fontFamily = MonoFamily, fontSize = 12.sp, modifier = Modifier.padding(bottom = 16.dp))
         }
 
         LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
@@ -594,7 +571,7 @@ fun AiScreen() {
 }
 
 suspend fun callGemini(client: OkHttpClient, apiKey: String, prompt: String): String = withContext(Dispatchers.IO) {
-    if (apiKey.isEmpty()) return@withContext "Please set your Gemini API Key in the settings icon above."
+    if (apiKey.isEmpty()) return@withContext "Please set your Gemini API Key in Settings."
     
     try {
         val json = JSONObject().apply {
@@ -632,6 +609,10 @@ suspend fun callGemini(client: OkHttpClient, apiKey: String, prompt: String): St
 
 @Composable
 fun SecurityScreen(bgImageUri: String?, onPickImage: () -> Unit) {
+    val context = LocalContext.current
+    val prefs = context.getSharedPreferences("sds_prefs", Context.MODE_PRIVATE)
+    var apiKey by remember { mutableStateOf(prefs.getString("gemini_key", "") ?: "") }
+
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
         Text("Settings", fontFamily = SansFamily, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
         
@@ -653,6 +634,36 @@ fun SecurityScreen(bgImageUri: String?, onPickImage: () -> Unit) {
             }
         }
         
+        Spacer(Modifier.height(32.dp))
+        
+        Text("AI CONFIGURATION", fontFamily = MonoFamily, fontSize = 12.sp, color = TextTertiary, letterSpacing = 1.sp)
+        Spacer(Modifier.height(12.dp))
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Surface.copy(alpha = 0.85f)),
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(1.dp, Border)
+        ) {
+            Column(Modifier.padding(20.dp)) {
+                Text("Gemini API Key", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                Spacer(Modifier.height(8.dp))
+                BasicTextField(
+                    value = apiKey,
+                    onValueChange = { 
+                        apiKey = it
+                        prefs.edit().putString("gemini_key", it).apply()
+                    },
+                    textStyle = androidx.compose.ui.text.TextStyle(fontFamily = MonoFamily, fontSize = 14.sp, color = TextPrimary),
+                    cursorBrush = SolidColor(TextPrimary),
+                    modifier = Modifier.fillMaxWidth().background(Bg).border(1.dp, Border).padding(12.dp),
+                    decorationBox = { inner ->
+                        if (apiKey.isEmpty()) Text("Enter API Key here...", fontFamily = MonoFamily, fontSize = 14.sp, color = TextTertiary)
+                        inner()
+                    }
+                )
+            }
+        }
+
         Spacer(Modifier.height(32.dp))
         
         Text("STORAGE", fontFamily = MonoFamily, fontSize = 12.sp, color = TextTertiary, letterSpacing = 1.sp)
