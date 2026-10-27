@@ -4,27 +4,14 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -49,7 +36,9 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.nio.ByteBuffer
 import java.nio.CharBuffer
 import java.nio.charset.Charset
@@ -94,10 +83,16 @@ class TermBuffer(var rows: Int = 24, var cols: Int = 80, val maxScrollback: Int 
     fun getAllText(): String {
         val sb = StringBuilder()
         for (r in 0 until rows) {
+            var isEmpty = true
+            val rowStr = StringBuilder()
             for (c in 0 until cols) {
-                sb.append(grid[r][c].char)
+                val ch = grid[r][c].char
+                rowStr.append(ch)
+                if (ch != ' ') isEmpty = false
             }
-            sb.append("\n")
+            if (!isEmpty) {
+                sb.append(rowStr.toString().trimEnd()).append("\n")
+            }
         }
         return sb.toString().trimEnd()
     }
@@ -241,7 +236,7 @@ fun TerminalRenderer(
     onInput: (ByteArray) -> Unit,
     onResize: (Int, Int) -> Unit,
     onKeyEvent: (KeyEvent) -> Boolean,
-    fontSize: TextUnit = 14.sp,
+    fontSize: TextUnit = 16.sp,
     modifier: Modifier = Modifier
 ) {
     val fr = remember { FocusRequester() }
@@ -255,10 +250,11 @@ fun TerminalRenderer(
     var textFieldValue by remember { mutableStateOf(TextFieldValue("")) }
     var cursorOn by remember { mutableStateOf(true) }
     var frameTick by remember { mutableIntStateOf(0) }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) { 
         while (true) { 
-            delay(33) 
+            delay(500) 
             frameTick++
             cursorOn = !cursorOn 
         } 
@@ -277,22 +273,34 @@ fun TerminalRenderer(
         Canvas(Modifier.fillMaxSize()) {
             frameTick
             buffer.revision
-            for (r in 0 until buffer.rows) for (c in 0 until buffer.cols) {
-                val cell = buffer.grid[r][c]
-                val x = c * cw; val y = r * ch
-                if (cell.bg != 0) drawRect(TermColors.color(cell.bg), Offset(x, y), Size(cw, ch))
-                if (cell.char != ' ') drawText(measurer, cell.char.toString(), Offset(x, y), style = style.copy(color = TermColors.color(cell.fg)))
+            for (r in 0 until buffer.rows) {
+                for (c in 0 until buffer.cols) {
+                    val cell = buffer.grid[r][c]
+                    if (cell.char != ' ') {
+                        val x = c * cw; val y = r * ch
+                        if (cell.bg != 0) drawRect(TermColors.color(cell.bg), Offset(x, y), Size(cw, ch))
+                        drawText(measurer, cell.char.toString(), Offset(x, y), style = style.copy(color = TermColors.color(cell.fg)))
+                    }
+                }
             }
             if (cursorOn) drawRect(TermColors.defaultFg().copy(alpha = 0.6f), Offset(buffer.cursorCol * cw, buffer.cursorRow * ch), Size(cw, ch))
         }
         BasicTextField(
             value = textFieldValue,
             onValueChange = { newValue ->
-                if (newValue.text.length > textFieldValue.text.length) {
-                    val typed = newValue.text.substring(textFieldValue.text.length)
-                    onInput(typed.toByteArray())
+                if (newValue.text.isNotEmpty()) {
+                    val typed = newValue.text
+                    textFieldValue = TextFieldValue("")
+                    scope.launch(Dispatchers.Default) {
+                        var offset = 0
+                        while (offset < typed.length) {
+                            val chunkSize = minOf(1024, typed.length - offset)
+                            val chunk = typed.substring(offset, offset + chunkSize)
+                            onInput(chunk.toByteArray())
+                            offset += chunkSize
+                        }
+                    }
                 }
-                textFieldValue = TextFieldValue("")
             },
             singleLine = true,
             textStyle = style.copy(color = Color.Transparent),
@@ -317,13 +325,13 @@ private val extraKeys = listOf(
 fun ExtraKeysRow(onSend: (String) -> Unit, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier.fillMaxWidth().background(Color(0xFF101114))
-            .horizontalScroll(rememberScrollState()).padding(horizontal = 4.dp, vertical = 4.dp),
+            .horizontalScroll(rememberScrollState()).padding(horizontal = 4.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         extraKeys.forEach { (label, v) ->
-            TextButton(onClick = { onSend(v) }, shape = RoundedCornerShape(6.dp), modifier = Modifier.height(36.dp)) {
-                Text(label, fontFamily = FontFamily.Monospace, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Color(0xFFC9CCD3))
+            TextButton(onClick = { onSend(v) }, shape = RoundedCornerShape(4.dp), modifier = Modifier.height(32.dp)) {
+                Text(label, fontFamily = FontFamily.Monospace, fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Color(0xFFC9CCD3))
             }
         }
     }
