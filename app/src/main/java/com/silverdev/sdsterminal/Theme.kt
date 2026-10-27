@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.os.Build
+import android.provider.Settings
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -62,8 +64,8 @@ val Red = Color(0xFFF2555A)
 val Accent = Color(0xFF6CB4EE)
 val SansFamily = FontFamily.SansSerif
 val MonoFamily = FontFamily.Monospace
-val TerminalBlack = Color(0xFF0D0D0D)
-val TerminalExtraRow = Color(0xFF101114)
+val TerminalTransparent = Color(0xCC000000)
+val TerminalExtraRow = Color(0xCC101114)
 val ImageUrl = "https://i.ibb.co/Z6cSZgYB/favicon.png"
 
 private val DarkColors = darkColorScheme(
@@ -85,7 +87,7 @@ fun SdsTheme(bgImageUri: String? = null, content: @Composable () -> Unit) {
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
-                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)))
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.65f)))
             }
             content()
         }
@@ -108,7 +110,7 @@ fun TerminalScreen(manager: SessionManager) {
     Column(Modifier.fillMaxSize().imePadding()) {
         if (sessions.isNotEmpty()) {
             ScrollableTabRow(
-                selectedTabIndex = activeIndex, containerColor = TerminalExtraRow.copy(alpha = 0.7f),
+                selectedTabIndex = activeIndex, containerColor = TerminalExtraRow,
                 contentColor = TextPrimary, edgePadding = 0.dp, modifier = Modifier.fillMaxWidth(),
                 divider = { HorizontalDivider(color = Border, thickness = 1.dp) }
             ) {
@@ -143,7 +145,7 @@ fun TerminalScreen(manager: SessionManager) {
                 }
             }
         }
-        Row(Modifier.fillMaxWidth().background(TerminalExtraRow.copy(alpha = 0.7f)).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().background(TerminalExtraRow).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = {
                 manager.newSession(); refresh(); activeIndex = manager.getSessions().size - 1
             }) { Icon(Icons.Default.Add, contentDescription = "New tab", tint = TextSecondary) }
@@ -404,6 +406,27 @@ fun OptimizationScreen() {
         }
 
         Spacer(Modifier.height(8.dp))
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            OutlinedButton(
+                onClick = {
+                    try {
+                        val intent = Intent(Settings.ACTION_GAME_DASHBOARD_SETTINGS)
+                        context.startActivity(intent)
+                    } catch (e: Exception) {
+                        toastMsg = "Game Dashboard settings not found on this device."
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().height(48.dp).padding(bottom = 8.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Accent),
+                shape = RoundedCornerShape(8.dp),
+                border = BorderStroke(1.dp, Accent)
+            ) {
+                Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Open Native Game Settings", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            }
+        }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(
