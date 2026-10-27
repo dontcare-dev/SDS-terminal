@@ -40,11 +40,12 @@ class TerminalSession(
         isRunning = true
         readJob = scope.launch {
             val bashFile = File(rootfsDir, "bin/bash")
-            val isRootfsReady = File(rootfsDir, ".installed_v8").exists() && bashFile.exists()
+            val isRootfsReady = File(rootfsDir, ".installed_v9").exists() && bashFile.exists()
             
             if (!isRootfsReady && !forceAndroidShell) {
                 feed("\r\n[*] Installing Linux environment (64-bit)...\r\n")
                 rootfsDir.deleteRecursively()
+                File(rootfsDir, ".installed_v8").delete()
                 File(rootfsDir, ".installed_v7").delete()
                 File(rootfsDir, ".installed_v6").delete()
                 File(rootfsDir, ".installed_v5").delete()
@@ -61,7 +62,12 @@ class TerminalSession(
                     
                     if (bashFile.exists()) {
                         feed("\r\n[*] Extraction verified. Starting bash...\r\n\r\n")
-                        File(rootfsDir, ".installed_v8").writeText("ok")
+                        File(rootfsDir, ".installed_v9").writeText("ok")
+                        
+                        try {
+                            File(rootfsDir, "root/.bash_profile").writeText("export PS1='sds \\$ '\n")
+                        } catch (e: Exception) {}
+                        
                     } else {
                         feed("\r\n[!] Extraction failed: /bin/bash missing.\r\n")
                         forceAndroidShell
@@ -72,7 +78,7 @@ class TerminalSession(
                 }
             }
 
-            val useShell = forceAndroidShell || !File(rootfsDir, ".installed_v8").exists()
+            val useShell = forceAndroidShell || !File(rootfsDir, ".installed_v9").exists()
             masterFd = if (useShell) launchAndroidShell() else launchProot()
 
             if (masterFd < 0) {
@@ -82,6 +88,18 @@ class TerminalSession(
             }
             readLoop()
         }
+    }
+
+    fun getRecentOutput(lines: Int): String {
+        val sb = StringBuilder()
+        val startRow = (buffer.rows - lines).coerceAtLeast(0)
+        for (r in startRow until buffer.rows) {
+            for (c in 0 until buffer.cols) {
+                sb.append(buffer.grid[r][c].char)
+            }
+            sb.append("\n")
+        }
+        return sb.toString().trim()
     }
 
     private fun downloadAndExtract(onProgress: (Float) -> Unit) {
@@ -218,11 +236,11 @@ class TerminalSession(
             if (n > 0) {
                 parser.feed(buf, n)
                 buffer.bump()
-                delay(16) 
+                delay(33) 
             } else if (n < 0) {
                 break
             } else {
-                delay(16)
+                delay(33)
             }
         }
         isRunning = false
