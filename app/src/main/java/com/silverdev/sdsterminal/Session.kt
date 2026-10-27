@@ -141,6 +141,20 @@ class TerminalSession(
         val tmpDir = File(context.filesDir, "tmp")
         tmpDir.mkdirs()
 
+        // Create a writable lib directory and copy talloc as libtalloc.so.2
+        val libDir = File(context.filesDir, "libs")
+        libDir.mkdirs()
+        try {
+            val tallocSrc = File(nativeDir, "libtalloc.so")
+            val tallocDest = File(libDir, "libtalloc.so.2")
+            if (tallocSrc.exists() && !tallocDest.exists()) {
+                tallocSrc.copyTo(tallocDest, overwrite = true)
+                tallocDest.setExecutable(true)
+            }
+        } catch (e: Exception) {
+            feed("\r\n[Warning] Failed to copy libtalloc.so.2: ${e.message}\r\n")
+        }
+
         val hasSdCard = Environment.isExternalStorageManager()
         val bindSdCard = if (hasSdCard) arrayOf("-b", "/storage/emulated/0:/sdcard") else arrayOf()
 
@@ -158,7 +172,7 @@ class TerminalSession(
         val env = arrayOf(
             "PROOT_LOADER=$nativeDir/libproot-loader.so",
             "PROOT_TMP_DIR=${tmpDir.absolutePath}",
-            "LD_LIBRARY_PATH=$nativeDir",
+            "LD_LIBRARY_PATH=${libDir.absolutePath}:$nativeDir",
             "HOME=/root",
             "TERM=xterm-256color",
             "LANG=C.UTF-8",
