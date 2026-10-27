@@ -650,7 +650,7 @@ fun AiScreen(manager: SessionManager) {
                 
                 session.write("$cmd\n".toByteArray())
                 
-                delay(15000)
+                delay(30000)
                 
                 val terminalOutput = session.getRecentOutput()
                 currentPrompt = "Terminal output after running '$cmd':\n---\n$terminalOutput\n---\n\nDid it succeed? If not, how to fix it? Provide the next command."
@@ -733,6 +733,13 @@ suspend fun callGeminiAgent(client: OkHttpClient, apiKey: String, prompt: String
     val systemPrompt = """
         You are an autonomous AI agent inside a Linux terminal.
         Your goal is to execute terminal commands to fulfill the user's request.
+        
+        CRITICAL RULES:
+        1. Always use non-interactive flags (e.g., 'apt-get install -y package_name') so the terminal doesn't wait for a [Y/n] prompt.
+        2. If you need to update package lists first, run 'apt-get update -y'.
+        3. If a command fails due to a lock, wait and try again.
+        4. You only get one command at a time. Read the output and provide the next command.
+        
         If you need to run a command, respond EXACTLY in this JSON format:
         {"message": "explanation of what you are doing", "command": "the_bash_command_here"}
         
