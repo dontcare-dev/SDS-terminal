@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -35,6 +36,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.toBitmap
 import androidx.navigation.compose.*
 import coil.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
@@ -363,7 +365,7 @@ fun OptimizationScreen() {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            pm.getApplicationIcon(app),
+                            bitmap = pm.getApplicationIcon(app).toBitmap().asImageBitmap(),
                             contentDescription = null,
                             modifier = Modifier.size(24.dp)
                         )
@@ -543,7 +545,7 @@ fun AiScreen() {
         }
     }
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
+    Column(Modifier.fillMaxSize().padding(16.dp).padding(top = 32.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Text("AI Assistant", fontFamily = SansFamily, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = TextPrimary, modifier = Modifier.weight(1f))
         }
