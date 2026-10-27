@@ -40,11 +40,12 @@ class TerminalSession(
         isRunning = true
         readJob = scope.launch {
             val bashFile = File(rootfsDir, "bin/bash")
-            val isRootfsReady = File(rootfsDir, ".installed_v4").exists() && bashFile.exists()
+            val isRootfsReady = File(rootfsDir, ".installed_v5").exists() && bashFile.exists()
             
             if (!isRootfsReady && !forceAndroidShell) {
-                feed("\r\n[*] Installing Linux environment...\r\n")
+                feed("\r\n[*] Installing Linux environment (64-bit)...\r\n")
                 rootfsDir.deleteRecursively()
+                File(rootfsDir, ".installed_v4").delete()
                 File(rootfsDir, ".installed_v3").delete()
                 File(rootfsDir, ".installed_v2").delete()
                 File(rootfsDir, ".installed").delete()
@@ -57,7 +58,7 @@ class TerminalSession(
                     
                     if (bashFile.exists()) {
                         feed("\r\n[*] Extraction verified. Starting bash...\r\n\r\n")
-                        File(rootfsDir, ".installed_v4").writeText("ok")
+                        File(rootfsDir, ".installed_v5").writeText("ok")
                     } else {
                         feed("\r\n[!] Extraction failed: /bin/bash missing.\r\n")
                         forceAndroidShell
@@ -68,7 +69,7 @@ class TerminalSession(
                 }
             }
 
-            val useShell = forceAndroidShell || !File(rootfsDir, ".installed_v4").exists()
+            val useShell = forceAndroidShell || !File(rootfsDir, ".installed_v5").exists()
             masterFd = if (useShell) launchAndroidShell() else launchProot()
 
             if (masterFd < 0) {
@@ -157,6 +158,7 @@ class TerminalSession(
         val env = arrayOf(
             "PROOT_LOADER=$nativeDir/libproot-loader.so",
             "PROOT_TMP_DIR=${tmpDir.absolutePath}",
+            "LD_LIBRARY_PATH=$nativeDir",
             "HOME=/root",
             "TERM=xterm-256color",
             "LANG=C.UTF-8",
