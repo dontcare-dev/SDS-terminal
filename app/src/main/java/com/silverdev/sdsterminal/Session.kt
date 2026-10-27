@@ -139,9 +139,12 @@ class TerminalSession(
     private fun launchProot(): Int {
         val nativeDir = context.applicationInfo.nativeLibraryDir
         
-        // Check if proot binaries actually downloaded properly (not 0 bytes)
         if (File("$nativeDir/libproot.so").length() == 0L) {
-            feed("\r\n[!] proot binary is missing from build.\r\n")
+            feed("\r\n[!] proot binary is missing.\r\n")
+            return -1
+        }
+        if (File("$nativeDir/libproot-loader.so").length() == 0L) {
+            feed("\r\n[!] proot loader is missing. Cannot start Linux.\r\n")
             return -1
         }
         
