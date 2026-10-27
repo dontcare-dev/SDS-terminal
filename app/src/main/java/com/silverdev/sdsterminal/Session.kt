@@ -32,6 +32,7 @@ class TerminalSession(
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     @Volatile private var masterFd: Int = -1
     @Volatile private var readJob: Job? = null
+    @Volatile private var writeJob: Job? = null
     var isRunning: Boolean = false
         private set
 
@@ -261,13 +262,18 @@ class TerminalSession(
     }
 
     fun write(data: ByteArray) {
-        val fd = masterFd; if (fd < 0) return
-        var off = 0
-        while (off < data.size) {
-            val chunk = data.copyOfRange(off, data.size)
-            val n = PtyNative.write(fd, chunk, chunk.size)
-            if (n <= 0) break
-            off += n
+        writeJob?.cancel()
+        writeJob = scope.launch {
+            val fd = masterFd; if (fd < 0) return@launch
+            var off = 0
+            while (off < data.size) {
+                val chunkSize = minOf(2048, data.size - off)
+                val chunk = data.copyOfRange(off, off + chunkSize)
+                val n = PtyNative.write(fd, chunk, chunk.size)
+                if (n <= 0) break
+                off += n
+                delay(5)
+            }
         }
     }
 
@@ -280,6 +286,7 @@ class TerminalSession(
 
     fun close() {
         readJob?.cancel()
+        writeJob?.cancel()
         if (masterFd >= 0) PtyNative.close(masterFd)
         masterFd = -1; isRunning = false; scope.cancel()
     }
