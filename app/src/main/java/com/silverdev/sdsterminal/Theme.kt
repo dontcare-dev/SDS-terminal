@@ -6,7 +6,6 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
-import android.provider.Settings
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -411,7 +410,7 @@ fun OptimizationScreen() {
             OutlinedButton(
                 onClick = {
                     try {
-                        val intent = Intent(Settings.ACTION_GAME_DASHBOARD_SETTINGS)
+                        val intent = Intent("android.settings.GAME_DASHBOARD_SETTINGS")
                         context.startActivity(intent)
                     } catch (e: Exception) {
                         toastMsg = "Game Dashboard settings not found on this device."
