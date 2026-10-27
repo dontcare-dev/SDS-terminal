@@ -44,6 +44,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -89,6 +90,17 @@ class TermBuffer(var rows: Int = 24, var cols: Int = 80, val maxScrollback: Int 
     var savedRow = 0; var savedCol = 0
     var currentFg = 7; var currentBg = 0; var currentBold = false
     var revision by mutableIntStateOf(0); private set
+
+    fun getAllText(): String {
+        val sb = StringBuilder()
+        for (r in 0 until rows) {
+            for (c in 0 until cols) {
+                sb.append(grid[r][c].char)
+            }
+            sb.append("\n")
+        }
+        return sb.toString().trimEnd()
+    }
 
     fun resize(nr: Int, nc: Int) {
         val ng = Array(nr) { r -> Array(nc) { c ->
@@ -239,7 +251,8 @@ fun TerminalRenderer(
     val m = remember(style) { measurer.measure("M", style) }
     val cw = m.size.width.toFloat().coerceAtLeast(1f)
     val ch = m.size.height.toFloat().coerceAtLeast(1f)
-    var textValue by remember { mutableStateOf("") }
+    
+    var textFieldValue by remember { mutableStateOf(TextFieldValue("")) }
     var cursorOn by remember { mutableStateOf(true) }
     var frameTick by remember { mutableIntStateOf(0) }
 
@@ -273,14 +286,21 @@ fun TerminalRenderer(
             if (cursorOn) drawRect(TermColors.defaultFg().copy(alpha = 0.6f), Offset(buffer.cursorCol * cw, buffer.cursorRow * ch), Size(cw, ch))
         }
         BasicTextField(
-            value = textValue,
-            onValueChange = { n ->
-                if (n.length > textValue.length) onInput(n.substring(textValue.length).toByteArray())
-                textValue = ""
+            value = textFieldValue,
+            onValueChange = { newValue ->
+                if (newValue.text.length > textFieldValue.text.length) {
+                    val typed = newValue.text.substring(textFieldValue.text.length)
+                    onInput(typed.toByteArray())
+                }
+                textFieldValue = TextFieldValue("")
             },
             singleLine = true,
             textStyle = style.copy(color = Color.Transparent),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, imeAction = ImeAction.None),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Ascii,
+                imeAction = ImeAction.None,
+                autoCorrectEnabled = false
+            ),
             modifier = Modifier.size(1.dp).alpha(0f).focusRequester(fr)
         )
     }
