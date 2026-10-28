@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Environment
 import android.speech.RecognizerIntent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -258,7 +259,7 @@ fun HomeScreen(bgImageUri: String?, onPickImage: () -> Unit, onTerminal: () -> U
 
         ActionCard("Terminal", "Launch bash shell", Icons.Default.Terminal, onTerminal)
         Spacer(Modifier.height(12.dp))
-        ActionCard("AI Assistant", "Ask questions or open apps", Icons.Default.AutoAwesome, onAi)
+        ActionCard("AI Agent", "Autonomous web & code generation", Icons.Default.AutoAwesome, onAi)
         Spacer(Modifier.height(12.dp))
         ActionCard("File Browser", "Browse Android storage", Icons.Default.Folder, onFiles)
         Spacer(Modifier.height(12.dp))
@@ -340,6 +341,7 @@ fun OptimizationScreen() {
     var showIgnoreList by remember { mutableStateOf(false) }
     var toastMsg by remember { mutableStateOf("") }
     var realTimeBoost by remember { mutableStateOf(true) }
+    var networkPriority by remember { mutableStateOf(true) }
     
     var totalRam by remember { mutableStateOf(0L) }
     var usedRam by remember { mutableStateOf(0L) }
@@ -445,6 +447,22 @@ fun OptimizationScreen() {
             )
         }
 
+        Row(
+            Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Text("Network Priority", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text("Prevents Wi-Fi sleeping for lower ping", color = TextSecondary, fontSize = 13.sp)
+            }
+            Switch(
+                checked = networkPriority,
+                onCheckedChange = { networkPriority = it },
+                colors = SwitchDefaults.colors(checkedThumbColor = Accent)
+            )
+        }
+
         Spacer(Modifier.height(8.dp))
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -493,9 +511,10 @@ fun OptimizationScreen() {
                             }
                         }
                         
-                        if (realTimeBoost) {
+                        if (realTimeBoost || networkPriority) {
                             val intent = Intent(context, GameBoosterService::class.java).apply {
                                 putExtra("target_pkg", targetPkg)
+                                putExtra("network_priority", networkPriority)
                                 putStringArrayListExtra("ignored_pkgs", ArrayList(ignoredApps))
                             }
                             ContextCompat.startForegroundService(context, intent)
@@ -557,6 +576,7 @@ fun OptimizationScreen() {
 }
 
 data class ChatMessage(val isUser: Boolean, val text: String)
+data class AgentAction(val message: String, val action: String?, val command: String?, val filePath: String?, val fileContent: String?)
 
 @Composable
 fun AiScreen(manager: SessionManager) {
@@ -565,7 +585,7 @@ fun AiScreen(manager: SessionManager) {
     val apiKey = prefs.getString("gemini_key", "") ?: ""
     
     var inputText by remember { mutableStateOf("") }
-    var messages by remember { mutableStateOf(listOf(ChatMessage(false, "Hello. I am the SDS Agent. I can run commands, fix errors, and install software autonomously. Try: 'install rust and discord.py'"))) }
+    var messages by remember { mutableStateOf(listOf(ChatMessage(false, "Hello. I am the SDS Agent. I have internet access, terminal access, and can write files. Try asking me to build a website or install software!"))) }
     var isTyping by remember { mutableStateOf(false) }
     
     val scope = rememberCoroutineScope()
@@ -605,55 +625,51 @@ fun AiScreen(manager: SessionManager) {
         messages = messages + ChatMessage(true, userMsg)
         inputText = ""
         
-        val lower = userMsg.lowercase()
-        if (lower.startsWith("open ")) {
-            val appName = lower.removePrefix("open ").trim()
-            val pm = context.packageManager
-            val packages = pm.getInstalledApplications(0)
-            val target = packages.find { 
-                (it.loadLabel(pm).toString().lowercase().contains(appName)) || 
-                (it.packageName.lowercase().contains(appName))
-            }
-            
-            if (target != null) {
-                val intent = pm.getLaunchIntentForPackage(target.packageName)
-                if (intent != null) {
-                    context.startActivity(intent)
-                    messages = messages + ChatMessage(false, "Opened ${target.loadLabel(pm)}.")
-                    return
-                }
-            } else {
-                messages = messages + ChatMessage(false, "App '$appName' not found on this device.")
-                return
-            }
-        }
-
         isTyping = true
         scope.launch {
             val session = manager.active() ?: manager.newSession()
             session.write("clear\n".toByteArray())
             delay(500)
 
-            var currentPrompt = userMsg
-            var maxIterations = 5
+            var currentPrompt = "User request: $userMsg\n\nEnvironment Info: You have /sdcard mounted. Save websites to /sdcard/SDS_Projects/."
+            var maxIterations = 15
             
             while (maxIterations > 0) {
                 val reply = callGeminiAgent(client, apiKey, currentPrompt)
                 messages = messages + ChatMessage(false, reply.message)
                 
-                if (reply.command.isNullOrBlank()) {
+                if (reply.action == "done" || reply.action.isNullOrBlank()) {
                     break
                 }
 
-                val cmd = reply.command.trim()
-                messages = messages + ChatMessage(true, "[Running]: $cmd")
+                if (reply.action == "run_command" && !reply.command.isNullOrBlank()) {
+                    val cmd = reply.command.trim()
+                    messages = messages + ChatMessage(true, "[Terminal]: $cmd")
+                    session.write("$cmd\n".toByteArray())
+                    
+                    val waitTime = if (cmd.contains("apt") || cmd.contains("pip") || cmd.contains("npm")) 30000L else 5000L
+                    delay(waitTime)
+                    
+                    val output = session.getRecentOutput()
+                    currentPrompt = "Command output:\n---\n$output\n---\nWhat is the next step? If done, use the 'done' action."
+                } 
+                else if (reply.action == "write_file" && !reply.filePath.isNullOrBlank() && reply.fileContent != null) {
+                    messages = messages + ChatMessage(true, "[Writing File]: ${reply.filePath}")
+                    try {
+                        withContext(Dispatchers.IO) {
+                            val file = File(reply.filePath)
+                            file.parentFile?.mkdirs()
+                            file.writeText(reply.fileContent)
+                        }
+                        currentPrompt = "File successfully written to ${reply.filePath}. What is the next step?"
+                    } catch (e: Exception) {
+                        currentPrompt = "Error writing file: ${e.message}. What is the next step?"
+                    }
+                }
+                else {
+                    currentPrompt = "Invalid action. Please use run_command, write_file, or done."
+                }
                 
-                session.write("$cmd\n".toByteArray())
-                
-                delay(30000)
-                
-                val terminalOutput = session.getRecentOutput()
-                currentPrompt = "Terminal output after running '$cmd':\n---\n$terminalOutput\n---\n\nDid it succeed? If not, how to fix it? Provide the next command."
                 maxIterations--
             }
             
@@ -690,7 +706,7 @@ fun AiScreen(manager: SessionManager) {
             }
             if (isTyping) {
                 item {
-                    Text("Agent is thinking/running commands...", fontFamily = MonoFamily, fontSize = 12.sp, color = TextTertiary, modifier = Modifier.padding(8.dp))
+                    Text("Agent is thinking/running tools...", fontFamily = MonoFamily, fontSize = 12.sp, color = TextTertiary, modifier = Modifier.padding(8.dp))
                 }
             }
         }
@@ -710,7 +726,7 @@ fun AiScreen(manager: SessionManager) {
                 cursorBrush = SolidColor(TextPrimary),
                 modifier = Modifier.weight(1f).background(Surface.copy(alpha = 0.85f)).border(1.dp, Border, RoundedCornerShape(8.dp)).padding(12.dp),
                 decorationBox = { inner ->
-                    if (inputText.isEmpty()) Text("Ask agent or 'install rust'...", fontFamily = MonoFamily, fontSize = 14.sp, color = TextTertiary)
+                    if (inputText.isEmpty()) Text("Ask agent to build a website...", fontFamily = MonoFamily, fontSize = 14.sp, color = TextTertiary)
                     inner()
                 }
             )
@@ -725,35 +741,33 @@ fun AiScreen(manager: SessionManager) {
     }
 }
 
-data class AgentResponse(val message: String, val command: String?)
-
-suspend fun callGeminiAgent(client: OkHttpClient, apiKey: String, prompt: String): AgentResponse = withContext(Dispatchers.IO) {
-    if (apiKey.isEmpty()) return@withContext AgentResponse("Please set your Gemini API Key in Settings.", null)
+suspend fun callGeminiAgent(client: OkHttpClient, apiKey: String, prompt: String): AgentAction = withContext(Dispatchers.IO) {
+    if (apiKey.isEmpty()) return@withContext AgentAction("Please set your Gemini API Key in Settings.", null, null, null, null)
     
     val systemPrompt = """
-        You are an autonomous AI agent inside a Linux terminal.
-        Your goal is to execute terminal commands to fulfill the user's request.
+        You are an autonomous AI agent with tools.
+        You can execute terminal commands, write files, and search the web.
         
-        CRITICAL RULES:
-        1. Always use non-interactive flags (e.g., 'apt-get install -y package_name') so the terminal doesn't wait for a [Y/n] prompt.
-        2. If you need to update package lists first, run 'apt-get update -y'.
-        3. If a command fails due to a lock, wait and try again.
-        4. You only get one command at a time. Read the output and provide the next command.
+        Available Actions:
+        1. {"action": "run_command", "command": "bash command here", "message": "I am running a command..."}
+        2. {"action": "write_file", "filePath": "/sdcard/SDS_Projects/index.html", "fileContent": "html content here", "message": "I am writing a file..."}
+        3. {"action": "done", "message": "Task completed!"}
         
-        If you need to run a command, respond EXACTLY in this JSON format:
-        {"message": "explanation of what you are doing", "command": "the_bash_command_here"}
-        
-        If the task is fully complete, respond with:
-        {"message": "Task completed successfully!", "command": null}
-        
-        Do not include markdown formatting like ```json. Just output raw JSON.
+        Rules:
+        - Always use non-interactive flags (e.g., apt-get install -y).
+        - You can search the web using Google Search grounding natively.
+        - If creating a website, write the HTML directly to /sdcard/SDS_Projects/index.html using write_file. You can download images via run_command using curl to /sdcard/SDS_Projects/images/.
+        - Output ONLY raw JSON. No markdown formatting.
     """.trimIndent()
 
     val json = JSONObject().apply {
         put("contents", org.json.JSONArray().put(JSONObject().apply {
             put("parts", org.json.JSONArray().put(JSONObject().apply {
-                put("text", "$systemPrompt\n\nUser: $prompt")
+                put("text", "$systemPrompt\n\n$prompt")
             }))
+        }))
+        put("tools", org.json.JSONArray().put(JSONObject().apply {
+            put("google_search", JSONObject())
         }))
     }
 
@@ -768,7 +782,7 @@ suspend fun callGeminiAgent(client: OkHttpClient, apiKey: String, prompt: String
     for (attempt in 1..3) {
         try {
             client.newCall(request).execute().use { response ->
-                val resBody = response.body?.string() ?: return@withContext AgentResponse("Error: Empty response", null)
+                val resBody = response.body?.string() ?: return@withContext AgentAction("Error: Empty response", null, null, null, null)
                 
                 if (response.code == 503 || response.code == 429) {
                     lastError = "API is busy (${response.code}). Retrying..."
@@ -776,9 +790,9 @@ suspend fun callGeminiAgent(client: OkHttpClient, apiKey: String, prompt: String
                 } else if (!response.isSuccessful) {
                     val jsonRes = JSONObject(resBody)
                     if (jsonRes.has("error")) {
-                        return@withContext AgentResponse("API Error: ${jsonRes.getJSONObject("error").getString("message")}", null)
+                        return@withContext AgentAction("API Error: ${jsonRes.getJSONObject("error").getString("message")}", null, null, null, null)
                     }
-                    return@withContext AgentResponse("HTTP Error: ${response.code}", null)
+                    return@withContext AgentAction("HTTP Error: ${response.code}", null, null, null, null)
                 } else {
                     val jsonRes = JSONObject(resBody)
                     val text = jsonRes.getJSONArray("candidates")
@@ -791,9 +805,12 @@ suspend fun callGeminiAgent(client: OkHttpClient, apiKey: String, prompt: String
                     val cleanText = text.replace("```json", "").replace("```", "").trim()
                     val parsed = JSONObject(cleanText)
                     
-                    return@withContext AgentResponse(
+                    return@withContext AgentAction(
                         message = parsed.optString("message", "Thinking..."),
-                        command = if (parsed.isNull("command")) null else parsed.optString("command")
+                        action = parsed.optString("action", null),
+                        command = parsed.optString("command", null),
+                        filePath = parsed.optString("filePath", null),
+                        fileContent = parsed.optString("fileContent", null)
                     )
                 }
             }
@@ -803,7 +820,7 @@ suspend fun callGeminiAgent(client: OkHttpClient, apiKey: String, prompt: String
         }
     }
     
-    return@withContext AgentResponse("Network or parsing error: $lastError", null)
+    return@withContext AgentAction("Network or parsing error: $lastError", null, null, null, null)
 }
 
 @Composable
