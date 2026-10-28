@@ -10,10 +10,12 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.os.IBinder
+import android.os.PowerManager
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -68,11 +70,14 @@ class TerminalService : Service() {
 
 class GameBoosterService : Service() {
     private var job: Job? = null
+    private var wifiLock: WifiManager.WifiLock? = null
+    private var wakeLock: PowerManager.WakeLock? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val targetPkg = intent?.getStringExtra("target_pkg") ?: ""
         val ignoredPkgs = intent?.getStringArrayListExtra("ignored_pkgs") ?: arrayListOf()
+        val networkPriority = intent?.getBooleanExtra("network_priority", false) ?: false
 
         val mgr = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -81,12 +86,30 @@ class GameBoosterService : Service() {
 
         val notification = NotificationCompat.Builder(this, "sds_booster")
             .setContentTitle("Game Booster Active")
-            .setContentText("Optimizing RAM in real-time...")
+            .setContentText("Optimizing RAM and Network...")
             .setSmallIcon(android.R.drawable.ic_menu_manage)
             .setOngoing(true)
             .build()
         
         startForeground(42, notification)
+
+        if (networkPriority) {
+            try {
+                val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    wifiLock = wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "SDS:GameBoosterWifi")
+                } else {
+                    wifiLock = wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "SDS:GameBoosterWifi")
+                }
+                wifiLock?.acquire()
+
+                val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+                wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "SDS:GameBoosterWake")
+                wakeLock?.acquire(60 * 60 * 1000L)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
 
         job = scope.launch {
             val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
@@ -110,6 +133,10 @@ class GameBoosterService : Service() {
 
     override fun onDestroy() {
         job?.cancel()
+        try {
+            wifiLock?.let { if (it.isHeld) it.release() }
+            wakeLock?.let { if (it.isHeld) it.release() }
+        } catch (e: Exception) {}
         super.onDestroy()
     }
 
