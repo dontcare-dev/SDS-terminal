@@ -9,6 +9,7 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.media.AudioManager
 import android.net.Uri
 import android.net.wifi.WifiManager
 import android.os.Build
@@ -72,12 +73,14 @@ class GameBoosterService : Service() {
     private var job: Job? = null
     private var wifiLock: WifiManager.WifiLock? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var previousDndMode: Int = NotificationManager.INTERRUPTION_FILTER_ALL
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val targetPkg = intent?.getStringExtra("target_pkg") ?: ""
         val ignoredPkgs = intent?.getStringArrayListExtra("ignored_pkgs") ?: arrayListOf()
-        val networkPriority = intent?.getBooleanExtra("network_priority", false) ?: false
+        val networkPriority = intent?.getBooleanExtra("network_priority", true) ?: true
+        val enableDnd = intent?.getBooleanExtra("enable_dnd", true) ?: true
 
         val mgr = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -85,13 +88,20 @@ class GameBoosterService : Service() {
         }
 
         val notification = NotificationCompat.Builder(this, "sds_booster")
-            .setContentTitle("Game Booster Active")
-            .setContentText("Optimizing RAM and Network...")
+            .setContentTitle("Ultimate Game Booster")
+            .setContentText("RAM, Network, and DND optimized...")
             .setSmallIcon(android.R.drawable.ic_menu_manage)
             .setOngoing(true)
             .build()
         
         startForeground(42, notification)
+
+        if (enableDnd && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (mgr.isNotificationPolicyAccessGranted) {
+                previousDndMode = mgr.currentInterruptionFilter
+                mgr.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
+            }
+        }
 
         if (networkPriority) {
             try {
@@ -117,7 +127,8 @@ class GameBoosterService : Service() {
             while (isActive) {
                 val mi = ActivityManager.MemoryInfo()
                 am.getMemoryInfo(mi)
-                if (mi.availMem < (mi.totalMem * 0.20)) {
+                
+                if (mi.availMem < (mi.totalMem * 0.25)) {
                     val apps = pm.getInstalledApplications(0)
                     for (app in apps) {
                         if (app.packageName != targetPkg && app.packageName != packageName && !ignoredPkgs.contains(app.packageName)) {
@@ -125,6 +136,21 @@ class GameBoosterService : Service() {
                         }
                     }
                 }
+                
+                val batteryIntent = registerReceiver(null, android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+                val temp = batteryIntent?.getIntExtra(android.os.BatteryManager.EXTRA_TEMPERATURE, 0) ?: 0
+                val tempCelsius = temp / 10.0
+                
+                if (tempCelsius > 42.0) {
+                    val mgr = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                    val alert = NotificationCompat.Builder(this@GameBoosterService, "sds_booster")
+                        .setContentTitle("Temperature Warning")
+                        .setContentText("Phone is getting hot (${tempCelsius}°C). Consider taking a break.")
+                        .setSmallIcon(android.R.drawable.stat_sys_warning)
+                        .build()
+                    mgr.notify(43, alert)
+                }
+
                 delay(10000)
             }
         }
@@ -136,6 +162,13 @@ class GameBoosterService : Service() {
         try {
             wifiLock?.let { if (it.isHeld) it.release() }
             wakeLock?.let { if (it.isHeld) it.release() }
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val mgr = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                if (mgr.isNotificationPolicyAccessGranted) {
+                    mgr.setInterruptionFilter(previousDndMode)
+                }
+            }
         } catch (e: Exception) {}
         super.onDestroy()
     }
