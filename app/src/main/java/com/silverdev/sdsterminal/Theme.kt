@@ -2,6 +2,7 @@ package com.silverdev.sdsterminal
 
 import android.app.Activity
 import android.app.ActivityManager
+import android.app.NotificationManager
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -263,7 +264,7 @@ fun HomeScreen(bgImageUri: String?, onPickImage: () -> Unit, onTerminal: () -> U
         Spacer(Modifier.height(12.dp))
         ActionCard("File Browser", "Browse Android storage", Icons.Default.Folder, onFiles)
         Spacer(Modifier.height(12.dp))
-        ActionCard("Game Booster", "Optimize RAM & performance", Icons.Default.Bolt, onOptimize)
+        ActionCard("Game Booster", "Ultimate RAM & Network optimization", Icons.Default.Bolt, onOptimize)
         Spacer(Modifier.height(12.dp))
         ActionCard("Settings", "Permissions & Appearance", Icons.Default.Settings, onSecurity)
         
@@ -334,6 +335,7 @@ fun OptimizationScreen() {
     val context = LocalContext.current
     val pm = context.packageManager
     val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+    val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     
     var allApps by remember { mutableStateOf(listOf<ApplicationInfo>()) }
     var selectedGame by remember { mutableStateOf<ApplicationInfo?>(null) }
@@ -342,6 +344,7 @@ fun OptimizationScreen() {
     var toastMsg by remember { mutableStateOf("") }
     var realTimeBoost by remember { mutableStateOf(true) }
     var networkPriority by remember { mutableStateOf(true) }
+    var autoDnd by remember { mutableStateOf(true) }
     
     var totalRam by remember { mutableStateOf(0L) }
     var usedRam by remember { mutableStateOf(0L) }
@@ -364,7 +367,7 @@ fun OptimizationScreen() {
     }
 
     Column(Modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState())) {
-        Text("Game Booster", fontFamily = SansFamily, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+        Text("Ultimate Game Booster", fontFamily = SansFamily, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
         
         Card(
             Modifier.fillMaxWidth().padding(top = 16.dp),
@@ -429,7 +432,10 @@ fun OptimizationScreen() {
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(24.dp))
+
+        Text("BOOST SETTINGS", fontFamily = MonoFamily, fontSize = 12.sp, color = TextTertiary, letterSpacing = 1.sp)
+        Spacer(Modifier.height(12.dp))
 
         Row(
             Modifier.fillMaxWidth().padding(vertical = 8.dp),
@@ -437,8 +443,8 @@ fun OptimizationScreen() {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column {
-                Text("Real-Time Auto-Boost", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                Text("Clears RAM every 10s while playing", color = TextSecondary, fontSize = 13.sp)
+                Text("Extreme RAM Purge", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text("Aggressively clears background apps", color = TextSecondary, fontSize = 13.sp)
             }
             Switch(
                 checked = realTimeBoost,
@@ -454,7 +460,7 @@ fun OptimizationScreen() {
         ) {
             Column {
                 Text("Network Priority", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                Text("Prevents Wi-Fi sleeping for lower ping", color = TextSecondary, fontSize = 13.sp)
+                Text("Low-latency Wi-Fi & Wake Lock", color = TextSecondary, fontSize = 13.sp)
             }
             Switch(
                 checked = networkPriority,
@@ -463,28 +469,32 @@ fun OptimizationScreen() {
             )
         }
 
-        Spacer(Modifier.height(8.dp))
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            OutlinedButton(
-                onClick = {
-                    try {
-                        val intent = Intent("android.settings.GAME_DASHBOARD_SETTINGS")
-                        context.startActivity(intent)
-                    } catch (e: Exception) {
-                        toastMsg = "Game Dashboard settings not found on this device."
+        Row(
+            Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Text("Auto Do Not Disturb", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text("Blocks calls & notifications", color = TextSecondary, fontSize = 13.sp)
+            }
+            Switch(
+                checked = autoDnd,
+                onCheckedChange = { 
+                    if (it && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !nm.isNotificationPolicyAccessGranted) {
+                        toastMsg = "Please grant DND access in settings."
+                        try {
+                            context.startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
+                        } catch (e: Exception) {}
+                    } else {
+                        autoDnd = it 
                     }
                 },
-                modifier = Modifier.fillMaxWidth().height(48.dp).padding(bottom = 8.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Accent),
-                shape = RoundedCornerShape(8.dp),
-                border = BorderStroke(1.dp, Accent)
-            ) {
-                Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Open Native Game Settings", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-            }
+                colors = SwitchDefaults.colors(checkedThumbColor = Red)
+            )
         }
+
+        Spacer(Modifier.height(24.dp))
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(
@@ -511,10 +521,11 @@ fun OptimizationScreen() {
                             }
                         }
                         
-                        if (realTimeBoost || networkPriority) {
+                        if (realTimeBoost || networkPriority || autoDnd) {
                             val intent = Intent(context, GameBoosterService::class.java).apply {
                                 putExtra("target_pkg", targetPkg)
                                 putExtra("network_priority", networkPriority)
+                                putExtra("enable_dnd", autoDnd)
                                 putStringArrayListExtra("ignored_pkgs", ArrayList(ignoredApps))
                             }
                             ContextCompat.startForegroundService(context, intent)
@@ -629,7 +640,7 @@ fun AiScreen(manager: SessionManager) {
         scope.launch {
             val session = manager.active() ?: manager.newSession()
             session.write("clear\n".toByteArray())
-            delay(500)
+            delay(1000)
 
             var currentPrompt = "User request: $userMsg\n\nEnvironment Info: You have /sdcard mounted. Save websites to /sdcard/SDS_Projects/."
             var maxIterations = 15
@@ -670,6 +681,7 @@ fun AiScreen(manager: SessionManager) {
                     currentPrompt = "Invalid action. Please use run_command, write_file, or done."
                 }
                 
+                delay(2000)
                 maxIterations--
             }
             
@@ -779,14 +791,15 @@ suspend fun callGeminiAgent(client: OkHttpClient, apiKey: String, prompt: String
 
     var lastError = "Unknown error"
     
-    for (attempt in 1..3) {
+    for (attempt in 1..5) {
         try {
             client.newCall(request).execute().use { response ->
                 val resBody = response.body?.string() ?: return@withContext AgentAction("Error: Empty response", null, null, null, null)
                 
                 if (response.code == 503 || response.code == 429) {
-                    lastError = "API is busy (${response.code}). Retrying..."
-                    delay(2000L * attempt)
+                    val backoff = 3000L * (1 shl (attempt - 1))
+                    lastError = "API is busy (${response.code}). Waiting ${backoff/1000}s before retry..."
+                    delay(backoff)
                 } else if (!response.isSuccessful) {
                     val jsonRes = JSONObject(resBody)
                     if (jsonRes.has("error")) {
@@ -816,7 +829,7 @@ suspend fun callGeminiAgent(client: OkHttpClient, apiKey: String, prompt: String
             }
         } catch (e: Exception) {
             lastError = e.message ?: "Network error"
-            if (attempt < 3) delay(2000L * attempt)
+            if (attempt < 5) delay(3000L * attempt)
         }
     }
     
